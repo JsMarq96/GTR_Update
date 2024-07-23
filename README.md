@@ -32,6 +32,7 @@ https://github.com/upf-gti/TJE_Framework/tree/master
 
 ### TODO
 - [x] Upgrade to OpenGL 4.3 (SDL3)
+- [ ] Fix gamepad support
 - [ ] Move dependencies to submodules
 - [ ] Test compute shaders
 - [ ] Add compute shader pipeline step
