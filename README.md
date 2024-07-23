@@ -30,3 +30,8 @@ The project includes a CMAKE to build the project. To use it in case the other o
 https://github.com/upf-gti/TJE_Framework/tree/master
 
 
+### TODO
+- [x] Upgrade to OpenGL 4.3 (SDL3)
+- [ ] Move dependencies to submodules
+- [ ] Test compute shaders
+- [ ] Add compute shader pipeline step
