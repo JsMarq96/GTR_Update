@@ -19,11 +19,10 @@
 	#define USE_GLEW
 	#define GLEW_STATIC
 	#include <GL/glew.h>
-	#pragma comment(lib, "glew32s.lib")
 #endif
 
-#define OPENGL_VERSION_MAJOR 3
-#define OPENGL_VERSION_MINOR 1
+#define OPENGL_VERSION_MAJOR 4
+#define OPENGL_VERSION_MINOR 3
 
 //SDL
 //#pragma comment(lib, "SDL2.lib")
@@ -32,14 +31,13 @@
 
 #define GL_GLEXT_PROTOTYPES
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_opengl.h>
-
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_opengl.h>
 
 
 //GLUT
 #ifdef WIN32
-    #include <GL/glext.h>
+    //#include <GL/glext.h>
     #include "GL/GLU.h"
 #endif
 
@@ -63,12 +61,12 @@
 //IMGUI
 #ifndef SKIP_IMGUI
 	//#define IMGUI_DEFINE_MATH_OPERATORS
-	#include "../extra/imgui/imgui_internal.h"
-	#include "../extra/imgui/imgui.h"
-	#include "../extra/imgui/imgui_impl_sdl2.h"
-	#include "../extra/imgui/imgui_impl_opengl3.h"
+	#include <imgui_internal.h>
+	#include <imgui.h>
+	#include <imgui_impl_sdl3.h>
+	#include <imgui_impl_opengl3.h>
 	
-	#include "../extra/imgui/ImGuizmo.h" //imguizmo
+	#include <ImGuizmo.h> //imguizmo
 	//#include "../extra/imgui/imfilebrowser.h"
 #endif
 

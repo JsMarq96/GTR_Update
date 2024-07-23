@@ -140,7 +140,7 @@ void Application::onKeyDown( SDL_KeyboardEvent event )
 			return;
 	}
 
-	switch(event.keysym.sym)
+	switch(event.key)
 	{
 		case SDLK_ESCAPE: must_exit = true; break; //ESC key, kill the app
 		case SDLK_TAB: render_ui = !render_ui; break;
@@ -176,7 +176,9 @@ void Application::onMouseButtonDown( SDL_MouseButtonEvent event )
 	{
 		//Input::centerMouse();
 		mouse_locked = !mouse_locked;
-		SDL_ShowCursor(!mouse_locked);
+		// TODO(Juan): Test if this really locks the mouse
+		SDL_SetRelativeMouseMode(!mouse_locked);
+		SDL_ShowCursor();
 	}
 }
 
@@ -194,7 +196,7 @@ void Application::onMouseWheel(SDL_MouseWheelEvent event)
 		if(!mouse_locked)
 		switch (event.type)
 		{
-			case SDL_MOUSEWHEEL:
+			case SDL_EVENT_MOUSE_WHEEL:
 			{
 				if (event.x > 0) io.MouseWheelH += 1;
 				if (event.x < 0) io.MouseWheelH -= 1;

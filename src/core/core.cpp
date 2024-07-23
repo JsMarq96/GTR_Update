@@ -45,7 +45,8 @@ CORE::BaseApplication::BaseApplication()
 void CORE::init()
 {
 	//prepare SDL
-	SDL_Init(SDL_INIT_EVERYTHING);
+	// TODO(Juan): SDL_init_everything?
+	SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_TIMER | SDL_INIT_EVENTS);
 	Input::init();
 	TaskManager::background.startThread();
 }
@@ -78,9 +79,10 @@ CORE::Window* CORE::createWindow(const char* caption, int width, int height, boo
 	SDL_InitSubSystem(SDL_INIT_JOYSTICK);
 
 	//create the window
-	SDL_Window* sdl_window = SDL_CreateWindow(caption, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE |
-		(retina ? SDL_WINDOW_ALLOW_HIGHDPI : 0) |
-		(fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
+	// TODO(Juan): SDL_WINDOWPOS_CENTERED in SDL3?
+	SDL_Window* sdl_window = SDL_CreateWindow(caption, width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE |
+		(retina ? SDL_WINDOW_HIGH_PIXEL_DENSITY : 0) |
+		(fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
 	if (!sdl_window)
 	{
 		fprintf(stderr, "Window creation error: %s\n", SDL_GetError());
@@ -96,7 +98,7 @@ CORE::Window* CORE::createWindow(const char* caption, int width, int height, boo
 	//get events from the queue of unprocessed events
 	SDL_PumpEvents(); //without this line asserts could fail on windows
 
-	SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
+	SDL_EventEnabled(SDL_EVENT_DROP_FILE);
 
 	//launch glew to extract the opengl extensions functions from the DLL
 #ifdef USE_GLEW
@@ -113,6 +115,19 @@ CORE::Window* CORE::createWindow(const char* caption, int width, int height, boo
 
 	current_window = sdl_window;
 
+
+
+	GLenum errCode;
+	const GLubyte* errString;
+
+	if ((errCode = glGetError()) != GL_NO_ERROR) {
+#ifndef GCC
+		errString = gluErrorString(errCode);
+		std::cerr << "OpenGL Error: " << (errString ? (const char*)errString : "NO ERROR STRING") << std::endl;
+#endif
+		assert(0);
+	}
+
 	//init imgui
 	initUI();
 
@@ -127,7 +142,7 @@ void CORE::initUI()
 	ImGui::CreateContext();
 	// Setup Platform/Renderer bindings
 	const char* glsl_version = "#version 130";
-	ImGui_ImplSDL2_InitForOpenGL(current_window, glcontext);
+	ImGui_ImplSDL3_InitForOpenGL(current_window, glcontext);
 	ImGui_ImplOpenGL3_Init(glsl_version);
 #endif
 
@@ -182,7 +197,7 @@ void CORE::mainLoop(CORE::Window* window, BaseApplication* app)
 			bool ui_mouse_want_capture = false;
 			bool ui_keyboard_want_capture = false;
 			#ifndef SKIP_IMGUI
-				ImGui_ImplSDL2_ProcessEvent(&sdlEvent);
+				ImGui_ImplSDL3_ProcessEvent(&sdlEvent);
 				ImGuiIO& io = ImGui::GetIO();
 				ui_mouse_want_capture = io.WantCaptureMouse;
 				ui_keyboard_want_capture = io.WantCaptureKeyboard;
@@ -190,52 +205,49 @@ void CORE::mainLoop(CORE::Window* window, BaseApplication* app)
 			
 			switch (sdlEvent.type)
 			{
-			case SDL_QUIT: return; break; //EVENT for when the user clicks the [x] in the corner
-			case SDL_MOUSEBUTTONDOWN: //EXAMPLE OF sync mouse input
+			case SDL_EVENT_QUIT: return; break; //EVENT for when the user clicks the [x] in the corner
+			case SDL_EVENT_MOUSE_BUTTON_DOWN: //EXAMPLE OF sync mouse input
 				Input::mouse_state |= SDL_BUTTON(sdlEvent.button.button);
 				if(!ui_mouse_want_capture)
 					app->onMouseButtonDown(sdlEvent.button);
 				break;
-			case SDL_MOUSEBUTTONUP:
+			case SDL_EVENT_MOUSE_BUTTON_UP:
 				Input::mouse_state &= ~SDL_BUTTON(sdlEvent.button.button);
 				if (!ui_mouse_want_capture)
 					app->onMouseButtonUp(sdlEvent.button);
 				break;
-			case SDL_MOUSEWHEEL:
+			case SDL_EVENT_MOUSE_WHEEL:
 				Input::mouse_wheel += sdlEvent.wheel.y;
 				Input::mouse_wheel_delta = sdlEvent.wheel.y;
 				app->onMouseWheel(sdlEvent.wheel);
 				break;
-			case SDL_KEYDOWN:
+			case SDL_EVENT_KEY_DOWN:
 				if (!ui_keyboard_want_capture)
 					app->onKeyDown(sdlEvent.key);
 				break;
-			case SDL_KEYUP:
+			case SDL_EVENT_KEY_UP:
 				if(!ui_keyboard_want_capture)
 					app->onKeyUp(sdlEvent.key);
 				break;
-			case SDL_JOYBUTTONDOWN:
+			case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
 				app->onGamepadButtonDown(sdlEvent.jbutton);
 				break;
-			case SDL_JOYBUTTONUP:
+			case SDL_EVENT_JOYSTICK_BUTTON_UP:
 				app->onGamepadButtonUp(sdlEvent.jbutton);
 				break;
-			case SDL_TEXTINPUT:
+			case SDL_EVENT_TEXT_INPUT:
 				// you can read the ASCII character from sdlEvent.text.text 
 				break;
-			case SDL_WINDOWEVENT:
-				switch (sdlEvent.window.event) {
-				case SDL_WINDOWEVENT_RESIZED: //resize opengl context
-					app->onResize(sdlEvent.window.data1, sdlEvent.window.data2);
-					break;
-				}
+			case SDL_EVENT_WINDOW_RESIZED: //resize opengl context
+				app->onResize(sdlEvent.window.data1, sdlEvent.window.data2);
 				break;
-			case SDL_DROPFILE:
-				std::string filename = cleanPath(sdlEvent.drop.file);
+			case SDL_EVENT_DROP_FILE:
+				// TODO(Juan): Validate the drag n drop (is it source, or data?)
+				std::string filename = cleanPath(sdlEvent.drop.source);
 				std::string relpath = makePathRelative(filename);
 				std::cout << "File Drop: " << relpath << std::endl;
 				app->onFileDrop(filename, relpath, sdlEvent);
-				SDL_free(sdlEvent.drop.file);
+				// TODO(Juan): Freeing SLD provided memory?? SDL_free(sdlEvent.drop.file);
 				break;
 			}
 		}
@@ -268,8 +280,6 @@ void CORE::mainLoop(CORE::Window* window, BaseApplication* app)
 		GFX::checkGLErrors();
 #endif
 	}
-
-	return;
 }
 
 void CORE::destroy()
@@ -277,11 +287,11 @@ void CORE::destroy()
 	// Cleanup
 #ifndef SKIP_IMGUI
 	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplSDL2_Shutdown();
+	ImGui_ImplSDL3_Shutdown();
 	ImGui::DestroyContext();
 #endif
 
-	SDL_GL_DeleteContext(glcontext);
+	SDL_GL_DestroyContext(glcontext);
 	SDL_DestroyWindow(current_window);
 
 	SDL_Quit();
@@ -296,7 +306,7 @@ void CORE::renderUI(CORE::Window* window, BaseApplication* app)
 
 	// Start the Dear ImGui frame
 	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplSDL2_NewFrame(window);
+	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
 	ImGuizmo::BeginFrame();
 
@@ -329,15 +339,23 @@ Vector2ui CORE::getWindowSize()
 
 Vector2ui CORE::getDesktopSize(int display_index)
 {
-	SDL_DisplayMode current;
 	// Get current display mode of all displays.
-	int should_be_zero = SDL_GetCurrentDisplayMode(display_index, &current);
-	return Vector2ui(current.w, current.h);
+	const SDL_DisplayMode* current = SDL_GetCurrentDisplayMode(display_index);
+
+	if (current == NULL) {
+		assert(0);
+	}
+
+	return Vector2ui(current->w, current->h);
 }
 
 void CORE::showCursor(bool v)
 {
-	SDL_ShowCursor(v); //hide or show the mouse
+	if (v) {
+		SDL_ShowCursor();
+	} else {
+		SDL_HideCursor();
+	}
 }
 
 void CORE::setCursorPosition(int x, int y)

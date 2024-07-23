@@ -4,3 +4,12 @@
 [submodule "libraries/sdl2"]
 	path = libraries/sdl2
 	url = https://github.com/libsdl-org/SDL.git
+[submodule "libraries/SDL"]
+	path = libraries/SDL
+	url = https://github.com/libsdl-org/SDL.git
+[submodule "libraries/glew"]
+	path = libraries/glew
+	url = https://github.com/nigels-com/glew.git
+[submodule "libraries/imgui"]
+	path = libraries/imgui
+	url = https://github.com/ocornut/imgui.git

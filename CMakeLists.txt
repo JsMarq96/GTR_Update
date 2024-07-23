@@ -50,7 +50,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-add_subdirectory(libraries/sdl2 EXCLUDE_FROM_ALL)
+add_subdirectory(libraries/SDL EXCLUDE_FROM_ALL)
 add_subdirectory(libraries/glew-cmake EXCLUDE_FROM_ALL)
 
 # Sources
@@ -72,7 +72,17 @@ CG_SOURCES_APPEND(${DIR_SOURCES}/gfx)
 CG_SOURCES_APPEND(${DIR_SOURCES}/pipeline)
 CG_SOURCES_APPEND(${DIR_SOURCES}/utils)
 
-add_executable(${PROJECT_NAME} ${CG_SOURCES})
+# ImGUI
+include_directories(libraries/imgui/)
+include_directories(libraries/imgui/backends/)
+set(IMGUI_IMPL_SRC libraries/imgui/backends/imgui_impl_sdl3.cpp 
+                   libraries/imgui/backends/imgui_impl_opengl3.cpp)
+file(GLOB IMGUI_SRC "libraries/imgui/*.cpp")
+
+include_directories(libraries/ImGuizmo/)
+file(GLOB IMGUIZMO_SRC "libraries/ImGuizmo/*.cpp")
+
+add_executable(${PROJECT_NAME} ${CG_SOURCES} ${IMGUI_IMPL_SRC} ${IMGUI_SRC} ${IMGUIZMO_SRC})
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${DIR_SOURCES})
 
@@ -103,20 +113,13 @@ if (APPLE)
 endif()
 
 # sdl2
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL2)
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL2main)
-include_directories(${PROJECT_NAME} libraries/sdl2/include)
-set_property(TARGET SDL2 PROPERTY FOLDER "External/SDL2")
-set_property(TARGET SDL2main PROPERTY FOLDER "External/SDL2")
-set_property(TARGET sdl_headers_copy PROPERTY FOLDER "External/SDL2")
+include_directories(${PROJECT_NAME} libraries/SDL/include)
 
 # glew
-add_definitions(-DGLEW_STATIC)
-target_link_libraries(${PROJECT_NAME} PRIVATE libglew_static)
-set_property(TARGET libglew_static PROPERTY FOLDER "External/libglew_static")
+include_directories(${PROJECT_NAME} libraries/glew-cmake/include)
 
 #opengl
-target_link_libraries(${PROJECT_NAME} PRIVATE OpenGL::GL OpenGL::GLU)
+target_link_libraries(${PROJECT_NAME} SDL3::SDL3 libglew_static OpenGL::GL OpenGL::GLU)
 
 # Properties
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 20)

@@ -3,6 +3,7 @@
 #include "../utils/utils.h"
 #include "shader.h"
 #include "../core/includes.h"
+#define _USE_MATH_DEFINES
 #include "math.h"
 #include "gfx.h"
 

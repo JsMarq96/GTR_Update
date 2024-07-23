@@ -631,40 +631,40 @@ bool SceneEditor::onKeyDown(SDL_KeyboardEvent event)
 	if (!scene)
 		return false;
 
-	switch (event.keysym.sym)
+	switch (event.key)
 	{
-	case SDLK_f:
+	case SDLK_F:
 		if (SCN::BaseEntity::s_selected && camera)
 			camera->lookAt(camera->eye, SCN::BaseEntity::s_selected->root.model.getTranslation(), Vector3f(0, 1, 0));
 		break;
-	case SDLK_l:
-		if (event.keysym.mod & KMOD_CTRL)
+	case SDLK_L:
+		if (event.mod & SDL_KMOD_CTRL)
 		{
 			scene->load(scene->filename.c_str());
 			clearUndo();
 		}
 		break;
-	case SDLK_s:
-		if (event.keysym.mod & KMOD_CTRL)
+	case SDLK_S:
+		if (event.mod & SDL_KMOD_CTRL)
 			scene->save(scene->filename.c_str());
 		break;
-	case SDLK_d:
-		if (event.keysym.mod & KMOD_CTRL && SCN::BaseEntity::s_selected)
+	case SDLK_D:
+		if (event.mod & SDL_KMOD_CTRL && SCN::BaseEntity::s_selected)
 		{
 			SCN::BaseEntity::s_selected = SCN::BaseEntity::s_selected->clone();
 			scene->addEntity(SCN::BaseEntity::s_selected);
 		}
 		break;
-	case SDLK_c:
-		if (event.keysym.mod & KMOD_CTRL)
+	case SDLK_C:
+		if (event.mod & SDL_KMOD_CTRL)
 		{
 			if (clipboard)
 				delete clipboard;
 			clipboard = SCN::BaseEntity::s_selected->clone();
 		}
 		break;
-	case SDLK_v:
-		if (event.keysym.mod & KMOD_CTRL)
+	case SDLK_V:
+		if (event.mod & SDL_KMOD_CTRL)
 		{
 			if (clipboard)
 			{
@@ -675,8 +675,8 @@ bool SceneEditor::onKeyDown(SDL_KeyboardEvent event)
 			}
 		}
 		break;
-	case SDLK_z:
-		if (event.keysym.mod & KMOD_CTRL)
+	case SDLK_Z:
+		if (event.mod & SDL_KMOD_CTRL)
 			doUndo();
 		break;
 	case SDLK_1: UI::manipulate_operation = ImGuizmo::TRANSLATE; break;

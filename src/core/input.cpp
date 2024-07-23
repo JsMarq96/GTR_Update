@@ -23,7 +23,7 @@ SDL_Joystick* _joy[4];
 
 void Input::init()
 {
-	int x, y;
+	float x, y;
 	//window = _window;
 	SDL_GetMouseState(&x, &y);
 	Input::mouse_position.set((float)x, (float)y);
@@ -45,7 +45,7 @@ void Input::update()
 	Input::keystate = SDL_GetKeyboardState(NULL);
 
 	//get mouse position and delta (do after pump events)
-	int x, y;
+	float x, y;
 	Input::mouse_state = SDL_GetMouseState(&x, &y);
 	Input::mouse_delta.set(Input::mouse_position.x - x, Input::mouse_position.y - y);
 	Input::mouse_position.set((float)x, (float)y);
@@ -67,91 +67,94 @@ void Input::centerMouse()
 	Input::mouse_position.y = (float)center_y;
 }
 
+// TODO(Juan): restablish joystick functionality (how to get joystick count on SLD3??)
 SDL_Joystick* Input::openGamepad(int index)
 {
-	// Check for number of joysticks available
-	if (SDL_NumJoysticks() <= index)
-		return NULL;
+	//// Check for number of joysticks available
+	//if (SDL_NumJoysticks() <= index)
+	//	return NULL;
 
-	SDL_Joystick* j = SDL_JoystickOpen(index);
-	std::cout << " * Gamepad found: " << SDL_JoystickName(j) << " Axis: " << SDL_JoystickNumAxes(j) << "  Buttons: " << SDL_JoystickNumButtons(j) << std::endl;
+	//SDL_Joystick* j = SDL_JoystickOpen(index);
+	//std::cout << " * Gamepad found: " << SDL_JoystickName(j) << " Axis: " << SDL_JoystickNumAxes(j) << "  Buttons: " << SDL_JoystickNumButtons(j) << std::endl;
 
-	// Open joystick and return it
-	return j;
+	//// Open joystick and return it
+	//return j;
+	return 0u;
 }
 
+// TODO(Juan): restablish joystick functionality
 void Input::updateGamepadState(SDL_Joystick* joystick, GamepadState& state)
 {
-	//save old state
-	int prev_direction = state.direction;
-	char prev_button[16];
-	memcpy(prev_button, state.button, 16);
+	////save old state
+	//int prev_direction = state.direction;
+	//char prev_button[16];
+	//memcpy(prev_button, state.button, 16);
 
-	//reset all gamepad state
-	memset(&state, 0, sizeof(GamepadState));
-	state.connected = false;
+	////reset all gamepad state
+	//memset(&state, 0, sizeof(GamepadState));
+	//state.connected = false;
 
-	if (joystick == NULL)
-		return;
+	//if (joystick == NULL)
+	//	return;
 
-	state.connected = true;
-	state.model = SDL_JoystickName((::SDL_Joystick*) joystick);
+	//state.connected = true;
+	//state.model = SDL_JoystickName((::SDL_Joystick*) joystick);
 
-	//state.axis_translator = strcmp(name, "XInput Controller #1") == 0 ? XInput : NULL;
+	////state.axis_translator = strcmp(name, "XInput Controller #1") == 0 ? XInput : NULL;
 
-	state.num_axis = SDL_JoystickNumAxes((::SDL_Joystick*) joystick);
-	state.num_buttons = SDL_JoystickNumButtons((::SDL_Joystick*)joystick);
+	//state.num_axis = SDL_JoystickNumAxes((::SDL_Joystick*) joystick);
+	//state.num_buttons = SDL_JoystickNumButtons((::SDL_Joystick*)joystick);
 
-	if (state.num_axis > 8) state.num_axis = 8;
-	if (state.num_buttons > 16) state.num_buttons = 16;
+	//if (state.num_axis > 8) state.num_axis = 8;
+	//if (state.num_buttons > 16) state.num_buttons = 16;
 
-	for (int i = 0; i < state.num_axis; ++i) //axis
-	{
-		float axis_value = SDL_JoystickGetAxis((::SDL_Joystick*) joystick, i) / 32768.0f; //range -32768 to 32768
-		Uint8 num = i;
+	//for (int i = 0; i < state.num_axis; ++i) //axis
+	//{
+	//	float axis_value = SDL_JoystickGetAxis((::SDL_Joystick*) joystick, i) / 32768.0f; //range -32768 to 32768
+	//	Uint8 num = i;
 
-		//windows 7 maps axis different that windows 10
-		if (state.num_axis == 5) 
-			num = axis5[i];
-		else if (state.num_axis == 6)
-			num = axis6[i];
-		state.axis[num] = axis_value;
-	}
-	if (state.num_axis == 5)
-	{
-		state.axis[TRIGGER_LEFT] = -state.axis[TRIGGERS];
-		state.axis[TRIGGER_RIGHT] = state.axis[TRIGGERS];
-	}
-	else if (state.num_axis == 6)
-		state.axis[TRIGGERS] = state.axis[TRIGGER_RIGHT] - state.axis[TRIGGER_LEFT];
+	//	//windows 7 maps axis different that windows 10
+	//	if (state.num_axis == 5) 
+	//		num = axis5[i];
+	//	else if (state.num_axis == 6)
+	//		num = axis6[i];
+	//	state.axis[num] = axis_value;
+	//}
+	//if (state.num_axis == 5)
+	//{
+	//	state.axis[TRIGGER_LEFT] = -state.axis[TRIGGERS];
+	//	state.axis[TRIGGER_RIGHT] = state.axis[TRIGGERS];
+	//}
+	//else if (state.num_axis == 6)
+	//	state.axis[TRIGGERS] = state.axis[TRIGGER_RIGHT] - state.axis[TRIGGER_LEFT];
 
-	for (int i = 0; i < state.num_buttons; ++i) //buttons
-	{
-		float value = SDL_JoystickGetButton((::SDL_Joystick*) joystick, i);
-		Uint8 num = i;
-		if (state.num_buttons == 15)
-		{
-			if (i < 4 || i > 13) //ignore HAT buttons 
-				continue;
-			num = buttons_15[i];
-		}
-		//if(value) std::cout << "B: " << int(i) << "->" << int(num) << std::endl;
-		if(num >= 0)
-			state.button[num] = value;
-	}
-	state.hat = (HATState)(SDL_JoystickGetHat((::SDL_Joystick*) joystick, 0) - SDL_HAT_CENTERED); //one hat is enough
-	memcpy(state.prev_button, prev_button, 16); //copy prev buttons state
+	//for (int i = 0; i < state.num_buttons; ++i) //buttons
+	//{
+	//	float value = SDL_JoystickGetButton((::SDL_Joystick*) joystick, i);
+	//	Uint8 num = i;
+	//	if (state.num_buttons == 15)
+	//	{
+	//		if (i < 4 || i > 13) //ignore HAT buttons 
+	//			continue;
+	//		num = buttons_15[i];
+	//	}
+	//	//if(value) std::cout << "B: " << int(i) << "->" << int(num) << std::endl;
+	//	if(num >= 0)
+	//		state.button[num] = value;
+	//}
+	//state.hat = (HATState)(SDL_JoystickGetHat((::SDL_Joystick*) joystick, 0) - SDL_HAT_CENTERED); //one hat is enough
+	//memcpy(state.prev_button, prev_button, 16); //copy prev buttons state
 
-	Vector2f axis_direction(state.axis[LEFT_ANALOG_X], state.axis[LEFT_ANALOG_Y]);
-	state.prev_direction = prev_direction;
-	state.direction = 0;
-	float limit = 0.6;
-	if (axis_direction.x < -limit)
-		state.direction |= PAD_LEFT;
-	else if (axis_direction.x > limit)
-		state.direction |= PAD_RIGHT;
-	if (axis_direction.y < -limit)
-		state.direction |= PAD_UP;
-	else if (axis_direction.y > limit)
-		state.direction |= PAD_DOWN;
+	//Vector2f axis_direction(state.axis[LEFT_ANALOG_X], state.axis[LEFT_ANALOG_Y]);
+	//state.prev_direction = prev_direction;
+	//state.direction = 0;
+	//float limit = 0.6;
+	//if (axis_direction.x < -limit)
+	//	state.direction |= PAD_LEFT;
+	//else if (axis_direction.x > limit)
+	//	state.direction |= PAD_RIGHT;
+	//if (axis_direction.y < -limit)
+	//	state.direction |= PAD_UP;
+	//else if (axis_direction.y > limit)
+	//	state.direction |= PAD_DOWN;
 }
