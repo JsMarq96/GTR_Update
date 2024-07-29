@@ -86,6 +86,36 @@ void Shader::setFilenames(const std::string& vsf, const std::string& psf)
 	fs_filename = psf;
 }
 
+bool Shader::load(const std::string& csf, const char* macros)
+{
+	assert(compiled == false);
+	assert(glGetError() == GL_NO_ERROR);
+
+	cs_filename = csf;
+	from_atlas = false;
+
+	bool printMacros = false;
+
+	std::cout << " + Shader: Compute: " << csf << (macros && printMacros ? macros : "") << std::endl;
+	std::string csm, psm;
+	if (!readFile(csf, csm))
+		return false;
+
+	if (macros)
+	{
+		csm = macros + csm;
+		this->macros = macros;
+	}
+
+	if (!compileComputeShaderFromMemory(csm))
+		return false;
+
+	assert(glGetError() == GL_NO_ERROR);
+
+	return true;
+}
+
+
 bool Shader::load(const std::string& vsf, const std::string& psf, const char* macros)
 {
 	assert(	compiled == false );
@@ -111,7 +141,7 @@ bool Shader::load(const std::string& vsf, const std::string& psf, const char* ma
 		this->macros = macros;
 	}
 
-	if (!compileFromMemory(vsm,psm))
+	if (!compileRasterShaderFromMemory(vsm,psm))
 		return false;
 
 	assert (glGetError() == GL_NO_ERROR);
@@ -195,7 +225,7 @@ bool Shader::hasInfoLog() const
 
 // ******************************************
 
-bool Shader::compileFromMemory(const std::string& vsm, const std::string& psm)
+bool Shader::compileRasterShaderFromMemory(const std::string& vsm, const std::string& psm)
 {
 	assert(glGetError() == GL_NO_ERROR);
 
@@ -243,6 +273,56 @@ bool Shader::compileFromMemory(const std::string& vsm, const std::string& psm)
 
 	compiled = true;
 	locations.clear(); //regenerate table
+
+	s_type = RASTER_SHADER;
+
+	return true;
+}
+
+
+bool Shader::compileComputeShaderFromMemory(const std::string& csm) {
+	assert(glGetError() == GL_NO_ERROR);
+
+	if (glCreateProgram == 0)
+	{
+		std::cout << "Error: your graphics cards dont support shaders. Sorry." << std::endl;
+		exit(0);
+	}
+
+	if (program != 0)
+		glDeleteProgram(program);
+	program = glCreateProgram();
+	assert(glGetError() == GL_NO_ERROR);
+
+	if (!createComputeShaderObject(csm))
+	{
+		printf("Compute shader compilation failed\n");
+		return false;
+	}
+
+	glLinkProgram(program);
+	assert(glGetError() == GL_NO_ERROR);
+
+	GLint linked = 0;
+
+	glGetProgramiv(program, GL_LINK_STATUS, &linked);
+	assert(glGetError() == GL_NO_ERROR);
+
+	if (!linked)
+	{
+		saveProgramInfoLog(program);
+		release();
+		return false;
+	}
+
+#ifdef _DEBUG
+	validate();
+#endif
+
+	compiled = true;
+	locations.clear(); //regenerate table
+
+	s_type = COMPUTE_SHADER;
 
 	return true;
 }
@@ -394,6 +474,21 @@ void Shader::disableShaders()
 {
 	glUseProgram(0);
 	assert (glGetError() == GL_NO_ERROR);
+}
+
+void Shader::computeDispatch(	const uint32_t dispatch_x,
+								const uint32_t dispatch_y, 
+								const uint32_t dispatch_z,
+								const bool wait_for) {
+	if (s_type != COMPUTE_SHADER) {
+		std::cout << "[ERROR] Trying to dispatch a non-compute shader." << std::endl;
+	}
+
+	glDispatchCompute(dispatch_x, dispatch_y, dispatch_z);
+
+	if (wait_for) {
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+	}
 }
 
 void Shader::saveShaderInfoLog(GLuint obj )
@@ -905,7 +1000,7 @@ Shader* Shader::getDefaultShader(std::string name)
 
 
 	Shader* sh = new Shader();
-	if (!sh->compileFromMemory(vs, fs))
+	if (!sh->compileRasterShaderFromMemory(vs, fs))
 	{
 		assert(0 && "error in default shader");
 		return NULL;
@@ -919,8 +1014,7 @@ Shader* Shader::getDefaultShader(std::string name)
 	return sh;
 }
 
-bool Shader::LoadAtlas(const char* filename, const char* base_path_cstr)
-{
+bool Shader::_ProcessShaderAtlas(const char* filename, const char* base_path_cstr, std::vector<std::string> &shader_lines) {
 	std::string content;
 	std::string base_path = base_path_cstr ? base_path_cstr : "";
 
@@ -931,16 +1025,16 @@ bool Shader::LoadAtlas(const char* filename, const char* base_path_cstr)
 	}
 
 	//separate subfiles
-	s_shader_atlas_filename = filename;
-	std::vector<std::string> lines = tokenize(content, "\n");
+	
+	shader_lines = tokenize(content, "\n");
 	std::string subfile_name = "";
 	std::string subfile_content = "";
 
 	//separate subfiles
 	std::map<std::string, std::string> subfiles;
-	for (size_t i = 0; i < lines.size(); ++i)
+	for (size_t i = 0; i < shader_lines.size(); ++i)
 	{
-		std::string& line = lines[i];
+		std::string& line = shader_lines[i];
 		std::string line_trimmed = trim(line);
 		if (line[0] == '\\')
 		{
@@ -949,7 +1043,7 @@ bool Shader::LoadAtlas(const char* filename, const char* base_path_cstr)
 			subfile_content = "";
 			continue;
 		}
-		if(line_trimmed.size())
+		if (line_trimmed.size())
 			subfile_content += line + "\n";
 	}
 	subfiles[subfile_name] = subfile_content;
@@ -964,7 +1058,19 @@ bool Shader::LoadAtlas(const char* filename, const char* base_path_cstr)
 	//compile shaders
 	std::string shaders = s_shader_files[""];
 
-	lines = tokenize(shaders, "\n");
+	shader_lines = tokenize(shaders, "\n");
+}
+
+bool Shader::LoadAtlas(const char* filename, const char* base_path_cstr)
+{
+	std::vector<std::string> lines;
+	s_shader_atlas_filename = filename;
+
+	// Load all the different files from the atlas
+	if (!_ProcessShaderAtlas(filename, base_path_cstr, lines)) {
+		return false;
+	}
+
 	for (size_t i = 0; i < lines.size(); ++i)
 	{
 		std::string& line = lines[i];
@@ -973,6 +1079,8 @@ bool Shader::LoadAtlas(const char* filename, const char* base_path_cstr)
 			continue;
 		int pos = line.find_first_of(' ');
 		int pos2 = line.find_first_of(' ', pos + 1);
+		if (pos2 == -1)
+			pos2 = std::string::npos;
 		int pos3 = line.find_first_of(' ', pos2 + 1);
 		if (pos3 == -1)
 			pos3 = std::string::npos;
@@ -982,13 +1090,34 @@ bool Shader::LoadAtlas(const char* filename, const char* base_path_cstr)
 		std::string macros = "";
 		if (pos3 != std::string::npos)
 			macros = line.substr(pos3 + 1);
+		int shader_filename_len = vs_filename.length();
 
 		if (name[0] == '@') //ubershader
 		{
 			std::vector<std::string> macros_tokens;
 			if (macros.size())
 				macros_tokens = tokenize(macros, ",");
-			s_ubershaders[name] = new UberShader( name, vs_filename, fs_filename, macros_tokens);
+			s_ubershaders[name] = new UberShader(name, vs_filename, fs_filename, macros_tokens);
+		}
+		else if (pos2 == std::string::npos && vs_filename.substr(shader_filename_len - 2, shader_filename_len) == "cs")
+		{
+			std::string cs_code;
+
+			if (!GetShaderFile(vs_filename.c_str(), cs_code))
+			{
+				std::cout << " * Error in shader atlas, couldnt find compute shader files for " << name << std::endl;
+				return false;
+			}
+
+			Shader* shader = CompileShader(COMPUTE_SHADER, name.c_str(), cs_code.c_str(), nullptr, macros.c_str());
+			if (!shader)
+			{
+				std::cout << TermColor::RED << "[ERROR]" << TermColor::DEFAULT << " Problem compiling shaders in atlas, canceling compilation." << std::endl;
+				return false;
+			}
+			shader->cs_filename = vs_filename;
+			shader->from_atlas = true;
+			std::cout << " + Compute shader from atlas: " << TermColor::CYAN << name << TermColor::DEFAULT << std::endl;
 		}
 		else //regular shader
 		{
@@ -998,11 +1127,11 @@ bool Shader::LoadAtlas(const char* filename, const char* base_path_cstr)
 			if (!GetShaderFile(vs_filename.c_str(), vs_code) ||
 				!GetShaderFile(fs_filename.c_str(), fs_code))
 			{
-				std::cout << " * Error in shader atlas, couldnt find files for " << name << std::endl;
+				std::cout << " * Error in shader atlas, couldnt find raster shader files for " << name << std::endl;
 				return false;
 			}
 
-			Shader* shader = CompileShader(name.c_str(), vs_code.c_str(), fs_code.c_str(), macros.c_str());
+			Shader* shader = CompileShader(RASTER_SHADER, name.c_str(), vs_code.c_str(), fs_code.c_str(), macros.c_str());
 			if (!shader)
 			{
 				std::cout << TermColor::RED << "[ERROR]" << TermColor::DEFAULT << " Problem compiling shaders in atlas, canceling compilation." << std::endl;
@@ -1011,7 +1140,7 @@ bool Shader::LoadAtlas(const char* filename, const char* base_path_cstr)
 			shader->vs_filename = vs_filename;
 			shader->fs_filename = fs_filename;
 			shader->from_atlas = true;
-			std::cout << " + Shader from atlas: " << TermColor::CYAN << name << TermColor::DEFAULT << std::endl;
+			std::cout << " + Raster shader from atlas: " << TermColor::CYAN << name << TermColor::DEFAULT << std::endl;
 		}
 	}
 
@@ -1073,9 +1202,7 @@ std::string Shader::ExpandIncludes(std::string name, std::string content, std::m
 	return subfile_content;
 }
 
-Shader* Shader::CompileShader(const char* name, const char* vs_code, const char* fs_code, const char* macros = nullptr)
-{
-	//expand macros
+void _compileShaderProcessMacros(const char* macros, std::string &shader_code) {
 	std::string macros_str = "";
 	if (macros)
 	{
@@ -1084,28 +1211,32 @@ Shader* Shader::CompileShader(const char* name, const char* vs_code, const char*
 			macros_str += "#define " + t[j] + "\n";
 	}
 
-	std::string vs(vs_code);
-	std::string fs(fs_code);
-	std::string version_vs;
-	std::string version_fs;
+	std::string version_shader;
 	size_t index;
 
 	//add macros after #version, otherwise it crashes
-	if (vs.substr(0,8) == "#version")
+	if (shader_code.substr(0, 8) == "#version")
 	{
-		index = vs.find_first_of('\n');
-		version_vs = vs.substr(0, index);
-		vs = vs.substr(index);
-	}
-	if (fs.substr(0, 8) == "#version")
-	{
-		index = fs.find_first_of('\n');
-		version_fs = fs.substr(0, index);
-		fs = fs.substr(index);
+		index = shader_code.find_first_of('\n');
+		version_shader = shader_code.substr(0, index);
+		shader_code = shader_code.substr(index);
 	}
 
-	vs = version_vs + "\n" + macros_str + "\n" + vs;
-	fs = version_fs + "\n" + macros_str + "\n" + fs;
+	shader_code = version_shader + "\n" + macros_str + "\n" + shader_code;
+}
+
+Shader* Shader::CompileShader(const eShaderType type, const char* name, const char* vs_code, const char* fs_code, const char* macros = nullptr)
+{
+	//expand macros
+	std::string vs(vs_code);
+	_compileShaderProcessMacros(macros, vs);
+
+	// If its a compute hsader, ignore the fs file
+	std::string fs;
+	if (type != COMPUTE_SHADER) {
+		fs = std::string(fs_code);
+		_compileShaderProcessMacros(macros, fs);
+	}
 
 	Shader* shader = NULL;
 	bool is_new = false;
@@ -1118,7 +1249,14 @@ Shader* Shader::CompileShader(const char* name, const char* vs_code, const char*
 	else
 		shader = it2->second;
 
-	if (!shader->compileFromMemory(vs.c_str(), fs.c_str()))
+	bool compile_shader_result;
+	if (type == COMPUTE_SHADER) {
+		compile_shader_result = shader->compileComputeShaderFromMemory(vs.c_str());
+	} else {
+		compile_shader_result = shader->compileRasterShaderFromMemory(vs.c_str(), fs.c_str());
+	}
+
+	if (!compile_shader_result)
 	{
 		delete shader;
 		std::cout << " * Compilation error in shader at atlas: " << name << std::endl;
@@ -1180,7 +1318,7 @@ Shader* Shader::UberShader::get(uint64 macros)
 		macros_str = macros_str.substr(0, macros_str.size() - 1); //remove last comma
 	}
 
-	Shader* shader = Shader::CompileShader(fullname.c_str(), vs_code.c_str(), fs_code.c_str(), macros_str.c_str() );
+	Shader* shader = Shader::CompileShader(RASTER_SHADER, fullname.c_str(), vs_code.c_str(), fs_code.c_str(), macros_str.c_str());
 	if (!shader)
 	{
 		has_error = true;

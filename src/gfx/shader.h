@@ -22,6 +22,12 @@
 
 namespace GFX {
 
+	enum eShaderType : uint8_t {
+		RASTER_SHADER = 0u,
+		COMPUTE_SHADER,
+		UNDEF_SHADER
+	};
+
 	class Texture;
 	class UBO;
 
@@ -30,6 +36,8 @@ namespace GFX {
 		int last_slot;
 
 		static bool s_ready; //used to initialize shader vars
+
+		eShaderType s_type = UNDEF_SHADER;
 
 	public:
 		static Shader* current;
@@ -42,9 +50,11 @@ namespace GFX {
 		bool recompile();
 
 		bool load(const std::string& vsf, const std::string& psf, const char* macros);
+		bool load(const std::string& csf, const char* macros);
 
 		//internal functions
-		bool compileFromMemory(const std::string& vsm, const std::string& psm);
+		bool compileRasterShaderFromMemory(const std::string& vsm, const std::string& psm);
+		bool compileComputeShaderFromMemory(const std::string& csm);
 		void release();
 		void enable();
 		void disable();
@@ -119,6 +129,7 @@ namespace GFX {
 
 		std::string vs_filename;
 		std::string fs_filename;
+		std::string cs_filename;
 		std::string macros;
 		bool compiled;
 		bool from_atlas;
@@ -141,6 +152,8 @@ namespace GFX {
 
 		bool validate();
 
+		void computeDispatch(const uint32_t dispatch_x, const uint32_t dispatch_y, const uint32_t dispatch_z, const bool wait_for = true);
+
 		//This is to speed up shader usage (save locations locally)
 		//HACK: uses original const char* value instead of string because uniform names will always come from const char* inside the code (are we sure??)
 		//const string comparator, allowing const char loctables
@@ -156,9 +169,10 @@ namespace GFX {
 		static std::map<std::string, std::string> s_shader_files; //stores strings with shadercode
 
 		//compiles and stores shader, if exist it will recompile it!
-		static Shader* CompileShader(const char* name, const char* vs_code, const char* fs_code, const char* macros);
+		static Shader* CompileShader(const eShaderType type, const char* name, const char* vs_code, const char* fs_code, const char* macros);
 		static std::string ExpandIncludes(std::string name, std::string content, std::map<std::string, std::string>& subfiles, const std::string& base_path);
 		static bool LoadAtlas(const char* filename, const char* base_path = nullptr);
+		static bool _ProcessShaderAtlas(const char* filename, const char* base_path_cstr, std::vector<std::string>& shader_lines);
 		static bool GetShaderFile(const char* filename, std::string& content);
 
 		//UberShaders allow permutations, use @ as the first char in the name to specify it
