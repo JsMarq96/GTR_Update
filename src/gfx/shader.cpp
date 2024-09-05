@@ -621,6 +621,11 @@ void Shader::setTexture(const char* varname, Texture* tex, int slot)
 	glActiveTexture(GL_TEXTURE0 + slot);
 }
 
+void Shader::setImage(const char* varname, Texture* texture, int biding, GLenum access) {
+	// TODO: Add support for layered textures
+	//glBindImageTexture(biding, texture->texture_id, 0, GL_FALSE, 0, access, texture->internal_format);
+}
+
 /*
 void Shader::setTexture(const char* varname, unsigned int tex)
 {

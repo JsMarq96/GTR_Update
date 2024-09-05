@@ -46,7 +46,7 @@ void CORE::init()
 {
 	//prepare SDL
 	// TODO(Juan): SDL_init_everything?
-	SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_TIMER | SDL_INIT_EVENTS);
+	SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_TIMER | SDL_INIT_VIDEO);
 	Input::init();
 	TaskManager::background.startThread();
 }

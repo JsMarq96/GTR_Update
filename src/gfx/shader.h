@@ -113,6 +113,7 @@ namespace GFX {
 
 		//void setTexture(const char* varname, const unsigned int tex) ;
 		void setTexture(const char* varname, Texture* texture, int slot);
+		void setImage(const char* varname, Texture* texture, int biding, GLenum access);
 
 		int getAttribLocation(const char* varname);
 		int getUniformLocation(const char* varname);
