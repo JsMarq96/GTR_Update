@@ -46,7 +46,7 @@ void CORE::init()
 {
 	//prepare SDL
 	// TODO(Juan): SDL_init_everything?
-	SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_TIMER | SDL_INIT_VIDEO);
+	SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_TIMER  | SDL_INIT_EVENTS | SDL_INIT_VIDEO);
 	Input::init();
 	TaskManager::background.startThread();
 }
@@ -68,7 +68,7 @@ CORE::Window* CORE::createWindow(const char* caption, int width, int height, boo
 #ifndef __APPLE__
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, OPENGL_VERSION_MAJOR);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, OPENGL_VERSION_MINOR);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
 #endif
 
 	//antialiasing (disable this lines if it goes too slow)
@@ -91,6 +91,7 @@ CORE::Window* CORE::createWindow(const char* caption, int width, int height, boo
 
 	// Create an OpenGL context associated with the window.
 	glcontext = SDL_GL_CreateContext(sdl_window);
+	SDL_GL_MakeCurrent(sdl_window, glcontext);
 
 	//in case of exit, call SDL_Quit()
 	atexit(SDL_Quit);
@@ -141,7 +142,7 @@ void CORE::initUI()
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	// Setup Platform/Renderer bindings
-	const char* glsl_version = "#version 130";
+	const char* glsl_version = "#version 430";
 	ImGui_ImplSDL3_InitForOpenGL(current_window, glcontext);
 	ImGui_ImplOpenGL3_Init(glsl_version);
 #endif
