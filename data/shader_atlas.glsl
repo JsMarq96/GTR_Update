@@ -103,11 +103,38 @@ uniform float u_alpha_cutoff;
 
 out vec4 FragColor;
 
+// Lighing
+const uniform u_ambient_light;
+
+const int MAX_LIGHT_COUNT = 10;
+uniform int u_light_count;
+uniform int u_light_type[MAX_LIGHT_COUNT];
+uniform vec3 u_light_pos[MAX_LIGHT_COUNT];
+uniform vec3 u_light_color[MAX_LIGHT_COUNT];
+
 void main()
 {
 	vec2 uv = v_uv;
 	vec4 color = u_color;
-	color *= texture( u_texture, v_uv );
+	color *= texture2D( u_texture, uv );
+
+	vec3 outgoing_light = u_ambient_light;
+
+	// Evaluate light contribution
+	for(int i = 0; i < u_light_count; i++) {
+		int light_type = u_light_type[i];
+		if (light_type == 0u) { // OMNI-light
+			
+		} else if (light_type == 1u) { // Directional-light
+
+		} else if (light_type == 3u) { // spot-light
+
+		}
+
+		outgoing_light += clamp(dot(normalize(u_light_pos[i] - v_world_position), v_normal), 0.0, 1.0) * u_light_color[i];
+	}
+
+	color *= outgoing_light;
 
 	if(color.a < u_alpha_cutoff)
 		discard;
