@@ -48,7 +48,7 @@ namespace SCN {
 		//...
 		void parseNodeTree(Node* node, Camera* cam);
 
-		void generateRenderables(SCN::Scene* scene, Camera* camera);
+		void parseSceneEntities(SCN::Scene* scene, Camera* camera);
 
 		//renders several elements of the scene
 		void renderScene(SCN::Scene* scene, Camera* camera);
