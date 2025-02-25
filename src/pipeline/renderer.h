@@ -11,7 +11,6 @@ namespace GFX {
 	class Shader;
 	class Mesh;
 	class FBO;
-	class Material;
 }
 
 namespace SCN {
