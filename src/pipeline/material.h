@@ -10,6 +10,7 @@ namespace GFX
 {
 	class Mesh;
 	class Texture;
+	class Shader;
 }
 
 namespace SCN {
@@ -72,6 +73,8 @@ namespace SCN {
 			index = s_last_index++;
 		}
 		virtual ~Material();
+
+		void bind(GFX::Shader *shader);
 
 		static void Release();
 	};

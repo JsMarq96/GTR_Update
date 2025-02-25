@@ -39,6 +39,8 @@ namespace SCN {
 		//add here your functions
 		//...
 
+		void generateRenderables(SCN::Scene* scene, Camera* camera);
+
 		//renders several elements of the scene
 		void renderScene(SCN::Scene* scene, Camera* camera);
 
@@ -52,8 +54,6 @@ namespace SCN {
 		void renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material);
 
 		void showUI();
-
-		void cameraToShader(Camera* camera, GFX::Shader* shader); //sends camera uniforms to shader
 	};
 
 };

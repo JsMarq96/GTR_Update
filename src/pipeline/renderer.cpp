@@ -46,13 +46,34 @@ void Renderer::setupScene()
 		skybox_cubemap = nullptr;
 }
 
+void Renderer::parseSceneEntities(SCN::Scene* scene, Camera* cam) {
+	// HERE =====================
+	// TODO: GENERATE RENDERABLES
+	// ==========================
+
+	for (int i = 0; i < scene->entities.size(); i++) {
+		BaseEntity* entity = scene->entities[i];
+
+		if (!entity->visible) {
+			continue;
+		}
+
+		// Store Prefab Entitys
+		// ...
+		//		Store Children Prefab Entities
+
+		// Store Lights
+		// ...
+	}
+	
+}
+
 void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 {
 	this->scene = scene;
 	setupScene();
 
-	glDisable(GL_BLEND);
-	glEnable(GL_DEPTH_TEST);
+	parseSceneEntities(scene, camera);
 
 	//set the clear color (the background color)
 	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
@@ -65,21 +86,9 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 	if(skybox_cubemap)
 		renderSkybox(skybox_cubemap);
 
-	//render entities
-	for (int i = 0; i < scene->entities.size(); ++i)
-	{
-		BaseEntity* ent = scene->entities[i];
-		if (!ent->visible )
-			continue;
-
-		//is a prefab!
-		if (ent->getType() == eEntityType::PREFAB)
-		{
-			PrefabEntity* pent = (SCN::PrefabEntity*)ent;
-			if (pent->prefab)
-				renderNode( &pent->root, camera);
-		}
-	}
+	// HERE =====================
+	// TODO: RENDER RENDERABLES
+	// ==========================
 }
 
 
@@ -87,9 +96,13 @@ void Renderer::renderSkybox(GFX::Texture* cubemap)
 {
 	Camera* camera = Camera::current;
 
+	// Apply skybox necesarry config:
+	// No blending, no dpeth test, we are always rendering the skybox
+	// Set the culling aproppiately, since we just want the back faces
 	glDisable(GL_BLEND);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
+
 	if (render_wireframe)
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
@@ -98,14 +111,23 @@ void Renderer::renderSkybox(GFX::Texture* cubemap)
 		return;
 	shader->enable();
 
+	// Center the skybox at the camera, with a big sphere
 	Matrix44 m;
 	m.setTranslation(camera->eye.x, camera->eye.y, camera->eye.z);
 	m.scale(10, 10, 10);
 	shader->setUniform("u_model", m);
-	cameraToShader(camera, shader);
+
+	// Upload camera uniforms
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+	shader->setUniform("u_camera_position", camera->eye);
+
 	shader->setUniform("u_texture", cubemap, 0);
+
 	sphere.render(GL_TRIANGLES);
+
 	shader->disable();
+
+	// Return opengl state to default
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	glEnable(GL_DEPTH_TEST);
 }
@@ -116,16 +138,16 @@ void Renderer::renderNode(SCN::Node* node, Camera* camera)
 	if (!node->visible)
 		return;
 
-	//compute global matrix
+	// Compute global matrix
 	Matrix44 node_model = node->getGlobalMatrix(true);
 
-	//does this node have a mesh? then we must render it
+	// Does this node have a mesh? then we must render it
 	if (node->mesh && node->material)
 	{
-		//compute the bounding box of the object in world space (by using the mesh bounding box transformed to world space)
-		BoundingBox world_bounding = transformBoundingBox(node_model,node->mesh->box);
+		// Compute the bounding box of the object in world space (by using the mesh bounding box transformed to world space)
+		BoundingBox world_bounding = transformBoundingBox(node_model, node->mesh->box);
 		
-		//if bounding box is inside the camera frustum then the object is probably visible
+		// If bounding box is inside the camera frustum then the object is probably visible
 		if (camera->testBoxInFrustum(world_bounding.center, world_bounding.halfsize) )
 		{
 			if(render_boundaries)
@@ -134,12 +156,12 @@ void Renderer::renderNode(SCN::Node* node, Camera* camera)
 		}
 	}
 
-	//iterate recursively with children
+	// Iterate recursively with children
 	for (int i = 0; i < node->children.size(); ++i)
 		renderNode( node->children[i], camera);
 }
 
-//renders a mesh given its transform and material
+// Renders a mesh given its transform and material
 void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material)
 {
 	//in case there is nothing to do
@@ -149,32 +171,7 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN
 
 	//define locals to simplify coding
 	GFX::Shader* shader = NULL;
-	GFX::Texture* texture = NULL;
 	Camera* camera = Camera::current;
-	
-	texture = material->textures[SCN::eTextureChannel::ALBEDO].texture;
-	//texture = material->emissive_texture;
-	//texture = material->metallic_roughness_texture;
-	//texture = material->normal_texture;
-	//texture = material->occlusion_texture;
-	if (texture == NULL)
-		texture = GFX::Texture::getWhiteTexture(); //a 1x1 white texture
-
-	//select the blending
-	if (material->alpha_mode == SCN::eAlphaMode::BLEND)
-	{
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	}
-	else
-		glDisable(GL_BLEND);
-
-	//select if render both sides of the triangles
-	if(material->two_sided)
-		glDisable(GL_CULL_FACE);
-	else
-		glEnable(GL_CULL_FACE);
-    assert(glGetError() == GL_NO_ERROR);
 
 	glEnable(GL_DEPTH_TEST);
 
@@ -188,19 +185,20 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN
 		return;
 	shader->enable();
 
+	material->bind(shader);
+
 	//upload uniforms
 	shader->setUniform("u_model", model);
-	cameraToShader(camera, shader);
+
+	// Upload camera uniforms
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+	shader->setUniform("u_camera_position", camera->eye);
+
+	// Upload time, for cool shader effects
 	float t = getTime();
 	shader->setUniform("u_time", t );
 
-	shader->setUniform("u_color", material->color);
-	if(texture)
-		shader->setUniform("u_texture", texture, 0);
-
-	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
-	shader->setUniform("u_alpha_cutoff", material->alpha_mode == SCN::eAlphaMode::MASK ? material->alpha_cutoff : 0.001f);
-
+	// Render just the verticies as a wireframe
 	if (render_wireframe)
 		glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 
@@ -213,12 +211,6 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN
 	//set the render state as it was before to avoid problems with future renders
 	glDisable(GL_BLEND);
 	glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
-}
-
-void SCN::Renderer::cameraToShader(Camera* camera, GFX::Shader* shader)
-{
-	shader->setUniform("u_viewprojection", camera->viewprojection_matrix );
-	shader->setUniform("u_camera_position", camera->eye);
 }
 
 #ifndef SKIP_IMGUI
