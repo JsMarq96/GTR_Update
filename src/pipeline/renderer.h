@@ -11,6 +11,7 @@ namespace GFX {
 	class Shader;
 	class Mesh;
 	class FBO;
+	class Material;
 }
 
 namespace SCN {
@@ -39,7 +40,7 @@ namespace SCN {
 		//add here your functions
 		//...
 
-		void generateRenderables(SCN::Scene* scene, Camera* camera);
+		void parseSceneEntities(SCN::Scene* scene, Camera* camera);
 
 		//renders several elements of the scene
 		void renderScene(SCN::Scene* scene, Camera* camera);
