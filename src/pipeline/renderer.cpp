@@ -132,35 +132,6 @@ void Renderer::renderSkybox(GFX::Texture* cubemap)
 	glEnable(GL_DEPTH_TEST);
 }
 
-//renders a node of the prefab and its children
-void Renderer::renderNode(SCN::Node* node, Camera* camera)
-{
-	if (!node->visible)
-		return;
-
-	// Compute global matrix
-	Matrix44 node_model = node->getGlobalMatrix(true);
-
-	// Does this node have a mesh? then we must render it
-	if (node->mesh && node->material)
-	{
-		// Compute the bounding box of the object in world space (by using the mesh bounding box transformed to world space)
-		BoundingBox world_bounding = transformBoundingBox(node_model, node->mesh->box);
-		
-		// If bounding box is inside the camera frustum then the object is probably visible
-		if (camera->testBoxInFrustum(world_bounding.center, world_bounding.halfsize) )
-		{
-			if(render_boundaries)
-				node->mesh->renderBounding(node_model, true);
-			renderMeshWithMaterial(node_model, node->mesh, node->material);
-		}
-	}
-
-	// Iterate recursively with children
-	for (int i = 0; i < node->children.size(); ++i)
-		renderNode( node->children[i], camera);
-}
-
 // Renders a mesh given its transform and material
 void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material)
 {

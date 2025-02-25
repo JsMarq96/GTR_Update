@@ -46,9 +46,6 @@ namespace SCN {
 
 		//render the skybox
 		void renderSkybox(GFX::Texture* cubemap);
-	
-		//to render one node from the prefab and its children
-		void renderNode(SCN::Node* node, Camera* camera);
 
 		//to render one mesh given its material and transformation matrix
 		void renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material);
