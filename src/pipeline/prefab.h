@@ -32,9 +32,6 @@ namespace SCN {
 		static Node* s_selected;
 		int m_Id;
 
-	public:
-
-	public:
 		std::string name;
 		bool visible;
 
