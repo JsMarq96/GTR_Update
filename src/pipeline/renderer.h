@@ -23,6 +23,14 @@ namespace SCN {
 	class Renderer
 	{
 	public:
+		struct sRenderCall {
+			GFX::Mesh		*mesh = nullptr;
+			Matrix44		model;
+			Material		*material = nullptr;
+		};
+
+		std::vector<sRenderCall> render_calls;
+
 		bool render_wireframe;
 		bool render_boundaries;
 
@@ -38,6 +46,7 @@ namespace SCN {
 
 		//add here your functions
 		//...
+		void parseNodeTree(Node* node, Camera* cam);
 
 		void generateRenderables(SCN::Scene* scene, Camera* camera);
 

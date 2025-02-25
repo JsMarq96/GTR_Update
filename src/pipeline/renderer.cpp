@@ -46,10 +46,30 @@ void Renderer::setupScene()
 		skybox_cubemap = nullptr;
 }
 
+void Renderer::parseNodeTree(Node* node, Camera* cam) {
+	if (!node) {
+		return;
+	}
+
+	// TODO: Frustrum culling
+
+	render_calls.push_back({
+		.mesh		= node->mesh,
+		.model		= node->getGlobalMatrix(),
+		.material	= node->material
+	});
+
+	for (Node* child_node : node->children) {
+		parseNodeTree(child_node, cam);
+	}
+};
+
 void Renderer::parseSceneEntities(SCN::Scene* scene, Camera* cam) {
 	// HERE =====================
 	// TODO: GENERATE RENDERABLES
 	// ==========================
+
+	render_calls.clear();
 
 	for (int i = 0; i < scene->entities.size(); i++) {
 		BaseEntity* entity = scene->entities[i];
@@ -58,6 +78,10 @@ void Renderer::parseSceneEntities(SCN::Scene* scene, Camera* cam) {
 			continue;
 		}
 
+		if (entity->getType() == eEntityType::PREFAB) {
+			PrefabEntity* ent = (PrefabEntity*)entity;
+			parseNodeTree(&(ent)->root, cam);
+		}
 		// Store Prefab Entitys
 		// ...
 		//		Store Children Prefab Entities
@@ -89,6 +113,10 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 	// HERE =====================
 	// TODO: RENDER RENDERABLES
 	// ==========================
+	for (sRenderCall& render_call : render_calls) {
+		renderMeshWithMaterial(render_call.model, render_call.mesh, render_call.material);
+	}
+
 }
 
 
