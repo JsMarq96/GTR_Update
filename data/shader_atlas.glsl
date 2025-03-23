@@ -6,6 +6,8 @@ depth quad.vs depth.fs
 multi basic.vs multi.fs
 compute test.cs
 
+phong basic.vs phong.fs
+
 \test.cs
 #version 430 core
 
@@ -103,38 +105,11 @@ uniform float u_alpha_cutoff;
 
 out vec4 FragColor;
 
-// Lighing
-const uniform u_ambient_light;
-
-const int MAX_LIGHT_COUNT = 10;
-uniform int u_light_count;
-uniform int u_light_type[MAX_LIGHT_COUNT];
-uniform vec3 u_light_pos[MAX_LIGHT_COUNT];
-uniform vec3 u_light_color[MAX_LIGHT_COUNT];
-
 void main()
 {
 	vec2 uv = v_uv;
 	vec4 color = u_color;
 	color *= texture2D( u_texture, uv );
-
-	vec3 outgoing_light = u_ambient_light;
-
-	// Evaluate light contribution
-	for(int i = 0; i < u_light_count; i++) {
-		int light_type = u_light_type[i];
-		if (light_type == 0u) { // OMNI-light
-			
-		} else if (light_type == 1u) { // Directional-light
-
-		} else if (light_type == 3u) { // spot-light
-
-		}
-
-		outgoing_light += clamp(dot(normalize(u_light_pos[i] - v_world_position), v_normal), 0.0, 1.0) * u_light_color[i];
-	}
-
-	color *= outgoing_light;
 
 	if(color.a < u_alpha_cutoff)
 		discard;
@@ -142,6 +117,70 @@ void main()
 	FragColor = color;
 }
 
+
+\phong.fs
+
+#version 330 core
+
+in vec3 v_position;
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+in vec4 v_color;
+
+uniform vec4 u_color;
+uniform sampler2D u_texture;
+uniform float u_time;
+uniform float u_alpha_cutoff;
+uniform vec3 u_camera_position;
+
+out vec4 FragColor;
+
+// Lighing
+uniform vec3 u_ambient_light;
+
+const int MAX_LIGHT_COUNT = 10;
+uniform int u_light_count;
+uniform int u_light_type[MAX_LIGHT_COUNT];
+uniform vec3 u_light_positions[MAX_LIGHT_COUNT];
+uniform vec3 u_light_colors[MAX_LIGHT_COUNT];
+uniform float u_light_intensities[MAX_LIGHT_COUNT];
+
+void main()
+{
+	vec2 uv = v_uv;
+	// Base color
+	vec4 color = u_color;
+	color *= texture2D( u_texture, uv );
+
+	if(color.a < u_alpha_cutoff)
+		discard;
+
+	vec3 N = normalize(v_normal);
+
+	// Ambient contributions
+	vec3 outgoing_light = u_ambient_light;
+
+	vec3 V = normalize(u_camera_position - v_world_position);
+
+	// Evaluate light contribution
+	for(int i = 0; i < u_light_count; i++) {
+		vec3 L = normalize(u_light_positions[i] - v_world_position);
+		vec3 R = reflect(-L, N);
+
+		float light_dist = distance(u_light_positions[i], v_world_position);
+		vec3 light_attenuation = (u_light_intensities[i] * u_light_colors[i]) / (1.0+(light_dist*light_dist));
+
+		// Diffuse contribution
+		outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation;
+		outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation;
+	}
+
+	// resulting_color = (ambeint + diffuse + specular) * base_color
+	color *= vec4(outgoing_light, 1.0);
+
+	FragColor = color;
+}
 
 \skybox.fs
 

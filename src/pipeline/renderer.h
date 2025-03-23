@@ -23,12 +23,16 @@ namespace SCN {
 	class Renderer
 	{
 	public:
+
 		struct sRenderCall {
 			GFX::Mesh		*mesh = nullptr;
 			Matrix44		model;
 			Material		*material = nullptr;
+
+			std::vector<LightEntity*> lights_in_call;
 		};
 
+		std::vector<LightEntity*> scene_lights;
 		std::vector<sRenderCall> render_calls;
 
 		bool render_wireframe;
@@ -57,7 +61,7 @@ namespace SCN {
 		void renderSkybox(GFX::Texture* cubemap);
 
 		//to render one mesh given its material and transformation matrix
-		void renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material);
+		void renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material, std::vector<LightEntity*> &lights_to_render);
 
 		void showUI();
 	};

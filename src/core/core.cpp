@@ -10,7 +10,7 @@
 
 #ifdef WIN32
 	#include <Commdlg.h>
-	#include <atlstr.h>
+	//#include <atlstr.h>
 	#include <windows.h> //time
 #else
 	#include <sys/time.h>

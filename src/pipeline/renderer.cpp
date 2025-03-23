@@ -70,6 +70,7 @@ void Renderer::parseSceneEntities(SCN::Scene* scene, Camera* cam) {
 	// ==========================
 
 	render_calls.clear();
+	scene_lights.clear();
 
 	for (int i = 0; i < scene->entities.size(); i++) {
 		BaseEntity* entity = scene->entities[i];
@@ -82,6 +83,9 @@ void Renderer::parseSceneEntities(SCN::Scene* scene, Camera* cam) {
 			PrefabEntity* ent = (PrefabEntity*)entity;
 			parseNodeTree(&(ent)->root, cam);
 		}
+		else if (entity->getType() == eEntityType::LIGHT) {
+			scene_lights.push_back((LightEntity*)entity);
+		}
 		// Store Prefab Entitys
 		// ...
 		//		Store Children Prefab Entities
@@ -90,6 +94,14 @@ void Renderer::parseSceneEntities(SCN::Scene* scene, Camera* cam) {
 		// ...
 	}
 	
+	// Add lights to each render call
+	for (int i = 0; i < render_calls.size(); i++) {
+		sRenderCall* call = &render_calls[i];
+
+		for (int j = 0; j < scene_lights.size(); j++) {
+			call->lights_in_call.push_back(scene_lights[j]);
+		}
+	}
 }
 
 void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
@@ -114,7 +126,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 	// TODO: RENDER RENDERABLES
 	// ==========================
 	for (sRenderCall& render_call : render_calls) {
-		renderMeshWithMaterial(render_call.model, render_call.mesh, render_call.material);
+		renderMeshWithMaterial(render_call.model, render_call.mesh, render_call.material, render_call.lights_in_call);
 	}
 
 }
@@ -161,7 +173,7 @@ void Renderer::renderSkybox(GFX::Texture* cubemap)
 }
 
 // Renders a mesh given its transform and material
-void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material)
+void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material, std::vector<LightEntity*>& lights_to_render)
 {
 	//in case there is nothing to do
 	if (!mesh || !mesh->getNumVertices() || !material )
@@ -175,7 +187,7 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN
 	glEnable(GL_DEPTH_TEST);
 
 	//chose a shader
-	shader = GFX::Shader::Get("texture");
+	shader = GFX::Shader::Get("phong");
 
     assert(glGetError() == GL_NO_ERROR);
 
@@ -185,6 +197,28 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN
 	shader->enable();
 
 	material->bind(shader);
+
+	// Upload light data
+	vec3* light_positions = new vec3[lights_to_render.size()];
+	vec3* light_colors = new vec3[lights_to_render.size()];
+	float* light_intensities = new float[lights_to_render.size()];
+	float* light_types = new float[lights_to_render.size()];
+
+	int i = 0;
+	for (LightEntity* light : lights_to_render) {
+		light_positions[i] = light->root.model.getTranslation();
+		light_colors[i] = light->color;
+		light_intensities[i] = light->intensity;
+		light_types[i] = light->light_type;
+		i++;
+	}
+
+	shader->setUniform3Array("u_light_positions", (float*)light_positions, min(10, lights_to_render.size()));
+	shader->setUniform3Array("u_light_colors", (float*)light_colors, min(10, lights_to_render.size()));
+	shader->setUniform1Array("u_light_intensities", (float*)light_intensities, min(10, lights_to_render.size()));
+	shader->setUniform1Array("u_light_type", (float*)light_types, min(10, lights_to_render.size()));
+	shader->setUniform1("u_light_count", (int) lights_to_render.size());
+	shader->setUniform3("u_ambient_light", vec3(0.0));
 
 	//upload uniforms
 	shader->setUniform("u_model", model);
@@ -210,6 +244,11 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN
 	//set the render state as it was before to avoid problems with future renders
 	glDisable(GL_BLEND);
 	glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
+
+	delete[] light_positions;
+	delete[] light_intensities;
+	delete[] light_types;
+	delete[] light_colors;
 }
 
 #ifndef SKIP_IMGUI
