@@ -200,7 +200,7 @@ bool UI::manipulateMatrix(Matrix44& matrix, Camera* camera)
 	ImGui::SameLine();
 	ImGui::Checkbox("Snap", &useSnap);
 	ImGui::SameLine();
-	static Vector3f translation_snap(1, 1, 1);
+	static Vector3f translation_snap(0.05, 0.05, 0.05);
 	static float angle_snap = 1;
 	static float scale_snap = 0.1;
 	float* snap = nullptr;

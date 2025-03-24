@@ -205,10 +205,6 @@ void SceneEditor::render(Camera* camera)
 		ImGui::EndTabItem();
 	}
 
-	if (ImGui::BeginTabItem("Stats"))
-	{
-	}
-
 
 	ImGui::EndTabBar();
 	ImGui::End();
@@ -354,7 +350,7 @@ void SceneEditor::inspectEntity(SCN::LightEntity* entity)
 	entity->light_type = (SCN::eLightType)(light_type);
 
 	ImGui::ColorEdit3("color", entity->color.v);
-	ImGui::SliderFloat("intensity", &entity->intensity, 0, 10);
+	ImGui::SliderFloat("intensity", &entity->intensity, 0, 100);
 	ImGui::DragFloat("near_distance", &entity->near_distance, 0.1, -10000.0f, 10000.0f);
 	ImGui::DragFloat("max_distance", &entity->max_distance, 1.0f, 0.0f,10000.0f);
 
