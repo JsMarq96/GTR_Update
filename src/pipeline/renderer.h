@@ -1,7 +1,7 @@
 #pragma once
 #include "scene.h"
 #include "prefab.h"
-
+#include "../gfx/fbo.h"
 #include "light.h"
 
 //forward declarations
@@ -35,6 +35,9 @@ namespace SCN {
 		std::vector<LightEntity*> scene_lights;
 		std::vector<sRenderCall> render_calls;
 
+		GFX::FBO shadow_FBO;
+		mat4 shadow_vp;
+
 		bool render_wireframe;
 		bool render_boundaries;
 
@@ -60,8 +63,10 @@ namespace SCN {
 		//render the skybox
 		void renderSkybox(GFX::Texture* cubemap);
 
+		void renderShadowMap(GFX::FBO &shadow_target, LightEntity *light);
+
 		//to render one mesh given its material and transformation matrix
-		void renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material, std::vector<LightEntity*> &lights_to_render);
+		void renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material, std::vector<LightEntity*> &lights_to_render);
 
 		void showUI();
 	};

@@ -134,6 +134,9 @@ uniform float u_time;
 uniform float u_alpha_cutoff;
 uniform vec3 u_camera_position;
 
+uniform mat4 u_shadow_vp;
+uniform sampler2D u_shadowmap;
+
 out vec4 FragColor;
 
 // Lighing
@@ -145,6 +148,23 @@ uniform int u_light_type[MAX_LIGHT_COUNT];
 uniform vec3 u_light_positions[MAX_LIGHT_COUNT];
 uniform vec3 u_light_colors[MAX_LIGHT_COUNT];
 uniform float u_light_intensities[MAX_LIGHT_COUNT];
+
+float get_shadow_depth(vec3 world_pos) {
+	vec4 fragment_shadow = u_shadow_vp * vec4(world_pos, 1.0);
+	vec2 frag_shadows_uv = ((fragment_shadow.xy / fragment_shadow.w) * 0.5) + vec2(0.5);
+
+	if (frag_shadows_uv.x < 0.0 && frag_shadows_uv.x > 1.0 && frag_shadows_uv.y < 0.0 && frag_shadows_uv.y > 1.0) {
+		return 0.0;
+	}
+
+	float shadow_map_depth = texture(u_shadowmap, frag_shadows_uv).x;
+	float frag_depth = (((fragment_shadow.z-0.001) / fragment_shadow.w) * 0.5) + 0.5;
+	if (shadow_map_depth < frag_depth) {
+		return 0.0;
+	}
+
+	return 1.0;
+}
 
 void main()
 {
@@ -171,14 +191,28 @@ void main()
 		float light_dist = distance(u_light_positions[i], v_world_position);
 		vec3 light_attenuation = (u_light_intensities[i] * u_light_colors[i]) / (1.0+(light_dist*light_dist));
 
+		float shadow = get_shadow_depth(v_world_position);
+
 		// Diffuse contribution
-		outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation;
-		outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation;
+		if (i == 3) {
+			outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation * shadow;
+			outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation * shadow;
+		} else {
+			outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation;
+			outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation;
+		}
+		
 	}
 
 	// resulting_color = (ambeint + diffuse + specular) * base_color
 	color *= vec4(outgoing_light, 1.0);
 
+	vec4 fragment_shadow = u_shadow_vp * vec4(v_world_position, 1.0);
+	vec2 frag_shadows_uv = ((fragment_shadow.xy / fragment_shadow.w) * 0.5) + vec2(0.5);
+	float shadow_map_depth = texture(u_shadowmap, frag_shadows_uv).x;
+	float frag_depth = ((fragment_shadow.z / fragment_shadow.w) * 0.5) + 0.5;
+
+	FragColor = vec4(frag_depth, 0.0, 0.0, 1.0);
 	FragColor = color;
 }
 

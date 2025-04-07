@@ -36,6 +36,9 @@ Renderer::Renderer(const char* shader_atlas_filename)
 
 	sphere.createSphere(1.0f);
 	sphere.uploadToVRAM();
+
+	Vector2ui win_wise = CORE::getWindowSize();
+	shadow_FBO.setDepthOnly(win_wise.x, win_wise.y);
 }
 
 void Renderer::setupScene()
@@ -44,6 +47,7 @@ void Renderer::setupScene()
 		skybox_cubemap = GFX::Texture::Get(std::string(scene->base_folder + "/" + scene->skybox_filename).c_str());
 	else
 		skybox_cubemap = nullptr;
+
 }
 
 void Renderer::parseNodeTree(Node* node, Camera* cam) {
@@ -122,13 +126,48 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 	if(skybox_cubemap)
 		renderSkybox(skybox_cubemap);
 
+	renderShadowMap(shadow_FBO, scene_lights[3]);
+
 	// HERE =====================
 	// TODO: RENDER RENDERABLES
 	// ==========================
 	for (sRenderCall& render_call : render_calls) {
-		renderMeshWithMaterial(render_call.model, render_call.mesh, render_call.material, render_call.lights_in_call);
+		renderMeshWithMaterial(Camera::current, render_call.model, render_call.mesh, render_call.material, render_call.lights_in_call);
 	}
 
+	/*GFX::Shader* depth = GFX::Shader::Get("depth");
+	depth->enable();
+	depth->setUniform("u_camera_nearfar", vec2(scene_lights[3]->near_distance, scene_lights[3]->max_distance));
+	shadow_FBO.depth_texture->toViewport(depth);
+	depth->disable();*/
+}
+
+void Renderer::renderShadowMap(GFX::FBO& shadow_target, LightEntity* light) {
+
+	glColorMask(false, false, false, false);
+
+	shadow_target.bind();
+
+	Camera light_cam;
+
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	float half_size = light->area / 2.0f;
+
+	mat4 light_mat = light->root.getGlobalMatrix();
+	light_cam.lookAt(light_mat.getTranslation(), light_mat * vec3(0.0f, 0.0f, -1.0f), vec3(0.0f, 1.0f, 0.0f));
+	light_cam.setOrthographic(-half_size, half_size, -half_size, half_size, light->near_distance, light->max_distance);
+	
+	shadow_vp = light_cam.viewprojection_matrix;
+
+	glEnable(GL_CULL_FACE);
+	for (sRenderCall& render_call : render_calls) {
+		renderMeshWithMaterial(&light_cam, render_call.model, render_call.mesh, render_call.material, render_call.lights_in_call);
+	}
+	glDisable(GL_CULL_FACE);
+	glColorMask(true, true, true, true);
+
+	shadow_target.unbind();
 }
 
 
@@ -173,7 +212,7 @@ void Renderer::renderSkybox(GFX::Texture* cubemap)
 }
 
 // Renders a mesh given its transform and material
-void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material, std::vector<LightEntity*>& lights_to_render)
+void Renderer::renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material, std::vector<LightEntity*>& lights_to_render)
 {
 	//in case there is nothing to do
 	if (!mesh || !mesh->getNumVertices() || !material )
@@ -182,7 +221,6 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN
 
 	//define locals to simplify coding
 	GFX::Shader* shader = NULL;
-	Camera* camera = Camera::current;
 
 	glEnable(GL_DEPTH_TEST);
 
@@ -219,6 +257,9 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, GFX::Mesh* mesh, SCN
 	shader->setUniform1Array("u_light_type", (float*)light_types, min(10, lights_to_render.size()));
 	shader->setUniform1("u_light_count", (int) lights_to_render.size());
 	shader->setUniform3("u_ambient_light", vec3(0.0));
+
+	shader->setUniform("u_shadow_vp", shadow_vp);
+	shader->setUniform("u_shadowmap", shadow_FBO.depth_texture, 1);
 
 	//upload uniforms
 	shader->setUniform("u_model", model);
