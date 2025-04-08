@@ -1,6 +1,7 @@
 //example of some shaders compiled
 flat basic.vs flat.fs
 texture basic.vs texture.fs
+plain basic.vs plain.fs
 skybox basic.vs skybox.fs
 depth quad.vs depth.fs
 multi basic.vs multi.fs
@@ -88,6 +89,17 @@ void main()
 }
 
 
+\plain.fs
+
+#version 330 core
+
+out vec4 FragColor;
+
+void main()
+{
+	FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+}
+
 \texture.fs
 
 #version 330 core
@@ -137,6 +149,9 @@ uniform vec3 u_camera_position;
 uniform mat4 u_shadow_vp;
 uniform sampler2D u_shadowmap;
 
+uniform mat4 u_shadow_vp1;
+uniform sampler2D u_shadowmap1;
+
 out vec4 FragColor;
 
 // Lighing
@@ -151,14 +166,33 @@ uniform float u_light_intensities[MAX_LIGHT_COUNT];
 
 float get_shadow_depth(vec3 world_pos) {
 	vec4 fragment_shadow = u_shadow_vp * vec4(world_pos, 1.0);
-	vec2 frag_shadows_uv = ((fragment_shadow.xy / fragment_shadow.w) * 0.5) + vec2(0.5);
+	fragment_shadow = fragment_shadow / fragment_shadow.w;
+	vec2 frag_shadows_uv = ((fragment_shadow.xy) * 0.5) + vec2(0.5);
 
 	if (frag_shadows_uv.x < 0.0 && frag_shadows_uv.x > 1.0 && frag_shadows_uv.y < 0.0 && frag_shadows_uv.y > 1.0) {
 		return 0.0;
 	}
 
 	float shadow_map_depth = texture(u_shadowmap, frag_shadows_uv).x;
-	float frag_depth = (((fragment_shadow.z-0.001) / fragment_shadow.w) * 0.5) + 0.5;
+	float frag_depth = ((((fragment_shadow.z - 0.0001))) * 0.5) + 0.5;
+	if (shadow_map_depth < frag_depth) {
+		return 0.0;
+	}
+
+	return 1.0;
+}
+
+float get_shadow_depth1(vec3 world_pos) {
+	vec4 fragment_shadow = u_shadow_vp1 * vec4(world_pos, 1.0);
+	fragment_shadow = fragment_shadow / fragment_shadow.w;
+	vec2 frag_shadows_uv = ((fragment_shadow.xy) * 0.5) + vec2(0.5);
+
+	if (frag_shadows_uv.x < 0.0 && frag_shadows_uv.x > 1.0 && frag_shadows_uv.y < 0.0 && frag_shadows_uv.y > 1.0) {
+		return 0.0;
+	}
+
+	float shadow_map_depth = texture(u_shadowmap1, frag_shadows_uv).x;
+	float frag_depth = ((((fragment_shadow.z - 0.0001))) * 0.5) + 0.5;
 	if (shadow_map_depth < frag_depth) {
 		return 0.0;
 	}
@@ -207,12 +241,6 @@ void main()
 	// resulting_color = (ambeint + diffuse + specular) * base_color
 	color *= vec4(outgoing_light, 1.0);
 
-	vec4 fragment_shadow = u_shadow_vp * vec4(v_world_position, 1.0);
-	vec2 frag_shadows_uv = ((fragment_shadow.xy / fragment_shadow.w) * 0.5) + vec2(0.5);
-	float shadow_map_depth = texture(u_shadowmap, frag_shadows_uv).x;
-	float frag_depth = ((fragment_shadow.z / fragment_shadow.w) * 0.5) + 0.5;
-
-	FragColor = vec4(frag_depth, 0.0, 0.0, 1.0);
 	FragColor = color;
 }
 

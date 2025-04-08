@@ -126,7 +126,8 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 	if(skybox_cubemap)
 		renderSkybox(skybox_cubemap);
 
-	renderShadowMap(shadow_FBO, scene_lights[3]);
+	renderShadowMap(shadow_vp, shadow_FBO, scene_lights[3]);
+	renderShadowMap(shadow_vp1, shadow_FBO1, scene_lights[0]);
 
 	// HERE =====================
 	// TODO: RENDER RENDERABLES
@@ -142,7 +143,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 	depth->disable();*/
 }
 
-void Renderer::renderShadowMap(GFX::FBO& shadow_target, LightEntity* light) {
+void Renderer::renderShadowMap(mat4 &shadow_viewproj, GFX::FBO& shadow_target, LightEntity* light) {
 
 	glColorMask(false, false, false, false);
 
@@ -157,8 +158,8 @@ void Renderer::renderShadowMap(GFX::FBO& shadow_target, LightEntity* light) {
 	mat4 light_mat = light->root.getGlobalMatrix();
 	light_cam.lookAt(light_mat.getTranslation(), light_mat * vec3(0.0f, 0.0f, -1.0f), vec3(0.0f, 1.0f, 0.0f));
 	light_cam.setOrthographic(-half_size, half_size, -half_size, half_size, light->near_distance, light->max_distance);
-	
-	shadow_vp = light_cam.viewprojection_matrix;
+
+	shadow_viewproj = light_cam.viewprojection_matrix;
 
 	glEnable(GL_CULL_FACE);
 	for (sRenderCall& render_call : render_calls) {
@@ -260,6 +261,9 @@ void Renderer::renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX:
 
 	shader->setUniform("u_shadow_vp", shadow_vp);
 	shader->setUniform("u_shadowmap", shadow_FBO.depth_texture, 1);
+
+	shader->setUniform("u_shadow_vp1", shadow_vp1);
+	shader->setUniform("u_shadowmap1", shadow_FBO1.depth_texture, 2);
 
 	//upload uniforms
 	shader->setUniform("u_model", model);
