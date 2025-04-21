@@ -112,6 +112,8 @@ if (APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${cocoa_lib})
 endif()
 
+target_compile_definitions(${PROJECT_NAME} PUBLIC _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+
 # sdl2
 include_directories(${PROJECT_NAME} libraries/SDL/include)
 

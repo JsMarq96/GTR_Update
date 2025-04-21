@@ -35,6 +35,8 @@ namespace SCN {
 		std::vector<LightEntity*> scene_lights;
 		std::vector<sRenderCall> render_calls;
 
+		GFX::Mesh* quad;
+
 		GFX::FBO shadow_FBO;
 		mat4 shadow_vp;
 
@@ -43,6 +45,8 @@ namespace SCN {
 
 		bool render_wireframe;
 		bool render_boundaries;
+
+		GFX::FBO gbuffer;
 
 		GFX::Texture* skybox_cubemap;
 

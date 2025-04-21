@@ -39,6 +39,16 @@ Renderer::Renderer(const char* shader_atlas_filename)
 
 	Vector2ui win_wise = CORE::getWindowSize();
 	shadow_FBO.setDepthOnly(win_wise.x, win_wise.y);
+	shadow_FBO1.setDepthOnly(win_wise.x, win_wise.y);
+
+	gbuffer.create(	win_wise.x, 
+					win_wise.y,
+					2,
+					GL_RGBA, 
+					GL_UNSIGNED_BYTE,
+					true);
+
+	quad = GFX::Mesh::getQuad();
 }
 
 void Renderer::setupScene()
@@ -132,9 +142,69 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 	// HERE =====================
 	// TODO: RENDER RENDERABLES
 	// ==========================
+	//gbuffer.enableAllBuffers();
+	gbuffer.bind();
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 	for (sRenderCall& render_call : render_calls) {
 		renderMeshWithMaterial(Camera::current, render_call.model, render_call.mesh, render_call.material, render_call.lights_in_call);
 	}
+
+	gbuffer.unbind();
+
+	//gbuffer.color_textures[0]->toViewport();
+
+	// Light pass ===============
+
+	GFX::Shader* shader = GFX::Shader::Get("deferred_light");
+	if (!shader)
+		return;
+	shader->enable();
+
+	// Upload light data
+	vec3 light_positions[10];
+	vec3 light_colors[10];
+	float light_intensities[10];
+	float light_types[10];
+
+	int i = 0;
+	for (LightEntity* light : scene_lights) {
+		light_positions[i] = light->root.model.getTranslation();
+		light_colors[i] = light->color;
+		light_intensities[i] = light->intensity;
+		light_types[i] = light->light_type;
+		i++;
+	}
+
+	shader->setUniform("u_shadow_vp", shadow_vp);
+	shader->setUniform("u_shadowmap", shadow_FBO.depth_texture, 1);
+
+	shader->setUniform("u_shadow_vp1", shadow_vp1);
+	shader->setUniform("u_shadowmap1", shadow_FBO1.depth_texture, 2);
+
+	shader->setUniform3Array("u_light_positions", (float*)light_positions, min(10, scene_lights.size()));
+	shader->setUniform3Array("u_light_colors", (float*)light_colors, min(10, scene_lights.size()));
+	shader->setUniform1Array("u_light_intensities", (float*)light_intensities, min(10, scene_lights.size()));
+	shader->setUniform1Array("u_light_type", (float*)light_types, min(10, scene_lights.size()));
+	shader->setUniform1("u_light_count", (int)scene_lights.size());
+	shader->setUniform3("u_ambient_light", vec3(0.0));
+
+	// Upload camera uniforms
+	mat4 vp_inv = camera->viewprojection_matrix;
+	vp_inv.inverse();
+	shader->setUniform("u_inv_vp_mat", vp_inv);
+	shader->setUniform("u_camera_position", camera->eye);
+
+	// Bing GBuffers
+	shader->setTexture("u_gbuffer_albedo", gbuffer.color_textures[0], 5);
+	shader->setTexture("u_gbuffer_normal", gbuffer.color_textures[1], 6);
+	shader->setTexture("u_gbuffer_depth", gbuffer.depth_texture, 7);
+
+	quad->render(GL_TRIANGLES);
+
+
+	shader->disable();
 
 	/*GFX::Shader* depth = GFX::Shader::Get("depth");
 	depth->enable();
@@ -226,7 +296,7 @@ void Renderer::renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX:
 	glEnable(GL_DEPTH_TEST);
 
 	//chose a shader
-	shader = GFX::Shader::Get("phong");
+	shader = GFX::Shader::Get("gbuffer_fill");
 
     assert(glGetError() == GL_NO_ERROR);
 
@@ -290,10 +360,10 @@ void Renderer::renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX:
 	glDisable(GL_BLEND);
 	glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
 
-	delete[] light_positions;
+	/*delete[] light_positions;
 	delete[] light_intensities;
 	delete[] light_types;
-	delete[] light_colors;
+	delete[] light_colors;*/
 }
 
 #ifndef SKIP_IMGUI
