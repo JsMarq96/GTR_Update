@@ -47,10 +47,15 @@ namespace SCN {
 		bool render_boundaries;
 
 		GFX::FBO gbuffer;
+		GFX::FBO light_buffer;
+
+		bool use_deffered_singlepass = false;
 
 		GFX::Texture* skybox_cubemap;
 
 		SCN::Scene* scene;
+		GFX::Mesh* cone;
+		GFX::Mesh sphere;
 
 		//updated every frame
 		Renderer(const char* shaders_atlas_filename );
