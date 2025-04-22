@@ -4,8 +4,11 @@ texture basic.vs texture.fs
 plain basic.vs plain.fs
 skybox basic.vs skybox.fs
 depth quad.vs depth.fs
+deferred_light quad.vs deferred_light.fs
 multi basic.vs multi.fs
-compute test.cs
+gbuffer_fill basic.vs gbuffer_fill.fs
+light_volume basic.vs light_volume.fs
+first_pas quad.vs first_pass.fs
 
 phong basic.vs phong.fs
 
@@ -129,6 +132,159 @@ void main()
 	FragColor = color;
 }
 
+\gbuffer_fill.fs
+
+#version 330 core
+
+in vec3 v_position;
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+in vec4 v_color;
+
+uniform vec4 u_color;
+uniform sampler2D u_texture;
+uniform float u_time;
+uniform float u_alpha_cutoff;
+uniform vec3 u_camera_position;
+
+layout(location = 0) out vec4 gbuffer_albedo;
+layout(location = 1) out vec4 gbuffer_normal_mat;
+
+void main()
+{
+	vec2 uv = v_uv;
+	// Base color
+	vec4 color = u_color;
+	color *= texture2D( u_texture, uv );
+
+	if(color.a < u_alpha_cutoff)
+		discard;
+
+	vec3 N = normalize(v_normal);
+
+	gbuffer_albedo = color;
+	gbuffer_normal_mat = vec4(N * 0.5 + 0.5, 64.0);
+}
+
+\deferred_light.fs
+#version 330 core
+
+in vec2 v_uv;
+
+uniform mat4 u_inv_vp_mat;
+
+uniform sampler2D u_gbuffer_albedo;
+uniform sampler2D u_gbuffer_normal;
+uniform sampler2D u_gbuffer_depth;
+
+uniform mat4 u_shadow_vp;
+uniform sampler2D u_shadowmap;
+
+uniform mat4 u_shadow_vp1;
+uniform sampler2D u_shadowmap1;
+
+uniform vec3 u_camera_position;
+
+out vec4 FragColor;
+
+// Lighing
+uniform vec3 u_ambient_light;
+
+const int MAX_LIGHT_COUNT = 10;
+uniform int u_light_count;
+uniform int u_light_type[MAX_LIGHT_COUNT];
+uniform vec3 u_light_positions[MAX_LIGHT_COUNT];
+uniform vec3 u_light_colors[MAX_LIGHT_COUNT];
+uniform float u_light_intensities[MAX_LIGHT_COUNT];
+
+float get_shadow_depth(vec3 world_pos) {
+	vec4 fragment_shadow = u_shadow_vp * vec4(world_pos, 1.0);
+	fragment_shadow = fragment_shadow / fragment_shadow.w;
+	vec2 frag_shadows_uv = ((fragment_shadow.xy) * 0.5) + vec2(0.5);
+
+	if (frag_shadows_uv.x < 0.0 && frag_shadows_uv.x > 1.0 && frag_shadows_uv.y < 0.0 && frag_shadows_uv.y > 1.0) {
+		return 0.0;
+	}
+
+	float shadow_map_depth = texture(u_shadowmap, frag_shadows_uv).x;
+	float frag_depth = ((((fragment_shadow.z - 0.0001))) * 0.5) + 0.5;
+	if (shadow_map_depth < frag_depth) {
+		return 0.0;
+	}
+
+	return 1.0;
+}
+
+float get_shadow_depth1(vec3 world_pos) {
+	vec4 fragment_shadow = u_shadow_vp1 * vec4(world_pos, 1.0);
+	fragment_shadow = fragment_shadow / fragment_shadow.w;
+	vec2 frag_shadows_uv = ((fragment_shadow.xy) * 0.5) + vec2(0.5);
+
+	if (frag_shadows_uv.x < 0.0 && frag_shadows_uv.x > 1.0 && frag_shadows_uv.y < 0.0 && frag_shadows_uv.y > 1.0) {
+		return 0.0;
+	}
+
+	float shadow_map_depth = texture(u_shadowmap1, frag_shadows_uv).x;
+	float frag_depth = ((((fragment_shadow.z - 0.0001))) * 0.5) + 0.5;
+	if (shadow_map_depth < frag_depth) {
+		return 0.0;
+	}
+
+	return 1.0;
+}
+
+void main()
+{
+	vec2 uv = v_uv;
+	
+	vec2 uv_clip = uv * 2.0 -1.0;
+
+	//uv.y = 1.0 - uv.y;
+
+	float depth = texture(u_gbuffer_depth, uv).r * 2.0 - 1.0;
+	vec4 color = texture(u_gbuffer_albedo, uv);
+	vec3 N = normalize(texture(u_gbuffer_normal, uv).rgb * 2.0 - 1.0);
+	float normal_w = texture(u_gbuffer_normal, uv).w;
+
+	vec4 not_norm_world_pos = u_inv_vp_mat * vec4(uv_clip.x, uv_clip.y, depth, 1.0);
+	vec3 world_pos = not_norm_world_pos.xyz / not_norm_world_pos.w;
+
+	// Ambient contributions
+	vec3 outgoing_light = u_ambient_light;
+
+	vec3 V = normalize(u_camera_position - world_pos);
+
+	// Evaluate light contribution
+	for(int i = 0; i < u_light_count; i++) {
+		vec3 L = normalize(u_light_positions[i] - world_pos);
+		vec3 R = reflect(-L, N);
+
+		float light_dist = distance(u_light_positions[i], world_pos);
+		vec3 light_attenuation = (u_light_intensities[i] * u_light_colors[i]) / (1.0+(light_dist*light_dist));
+
+		float shadow = get_shadow_depth(world_pos);
+
+		// Diffuse contribution
+		if (i == 3) {
+			outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation * shadow;
+			outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation * shadow;
+		} else {
+			outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation;
+			outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation;
+		}
+		
+	}
+
+	if (depth == 1.0) {
+		outgoing_light = color.xyz;
+	}
+
+	// resulting_color = (ambeint + diffuse + specular) * base_color
+	color *= vec4(outgoing_light, 1.0);
+
+	FragColor =color;
+}
 
 \phong.fs
 
@@ -277,13 +433,15 @@ in vec3 v_world_position;
 
 uniform samplerCube u_texture;
 uniform vec3 u_camera_position;
-out vec4 FragColor;
 
+layout(location = 0) out vec4 gbuffer_albedo;
+layout(location = 1) out vec4 gbuffer_normal_mat;
 void main()
 {
 	vec3 E = v_world_position - u_camera_position;
 	vec4 color = texture( u_texture, E );
-	FragColor = color;
+	gbuffer_albedo = color;
+	gbuffer_normal_mat = vec4(0.0);
 }
 
 
@@ -375,4 +533,187 @@ void main()
 
 	//calcule the position of the vertex using the matrices
 	gl_Position = u_viewprojection * vec4( v_world_position, 1.0 );
+}
+
+
+\light_volume.fs
+#version 330 core
+
+in vec3 v_position;
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+in vec4 v_color;
+
+uniform mat4 u_inv_vp_mat;
+
+uniform sampler2D u_gbuffer_albedo;
+uniform sampler2D u_gbuffer_normal;
+uniform sampler2D u_gbuffer_depth;
+
+uniform mat4 u_shadow_vp;
+uniform sampler2D u_shadowmap;
+
+uniform mat4 u_shadow_vp1;
+uniform sampler2D u_shadowmap1;
+
+uniform vec3 u_camera_position;
+
+uniform vec2 u_res_inv;
+
+out vec4 FragColor;
+
+// Lighing
+uniform vec3 u_ambient_light;
+
+const int MAX_LIGHT_COUNT = 10;
+uniform int u_light_count;
+uniform int u_light_type[MAX_LIGHT_COUNT];
+uniform vec3 u_light_positions[MAX_LIGHT_COUNT];
+uniform vec3 u_light_colors[MAX_LIGHT_COUNT];
+uniform float u_light_intensities[MAX_LIGHT_COUNT];
+
+uniform int u_index;
+
+float get_shadow_depth(vec3 world_pos) {
+	vec4 fragment_shadow = u_shadow_vp * vec4(world_pos, 1.0);
+	fragment_shadow = fragment_shadow / fragment_shadow.w;
+	vec2 frag_shadows_uv = ((fragment_shadow.xy) * 0.5) + vec2(0.5);
+
+	if (frag_shadows_uv.x < 0.0 && frag_shadows_uv.x > 1.0 && frag_shadows_uv.y < 0.0 && frag_shadows_uv.y > 1.0) {
+		return 0.0;
+	}
+
+	float shadow_map_depth = texture(u_shadowmap, frag_shadows_uv).x;
+	float frag_depth = ((((fragment_shadow.z - 0.0001))) * 0.5) + 0.5;
+	if (shadow_map_depth < frag_depth) {
+		return 0.0;
+	}
+
+	return 1.0;
+}
+
+void main()
+{
+	vec2 uv = gl_FragCoord.xy * u_res_inv;
+	
+	float depth = texture(u_gbuffer_depth, uv).r * 2.0 - 1.0;
+	vec4 color = texture(u_gbuffer_albedo, uv);
+	vec3 N = normalize(texture(u_gbuffer_normal, uv).rgb * 2.0 - 1.0);
+	float normal_w = texture(u_gbuffer_normal, uv).w;
+
+	vec2 uv_clip = uv * 2.0 -1.0;
+
+	vec4 not_norm_world_pos = u_inv_vp_mat * vec4(uv_clip.x, uv_clip.y, depth, 1.0);
+	vec3 world_pos = not_norm_world_pos.xyz / not_norm_world_pos.w;
+
+	// Ambient contributions
+	vec3 outgoing_light = vec3(0.0);
+
+	vec3 V = normalize(u_camera_position - world_pos);
+
+	// Evaluate light contribution
+		vec3 L = normalize(u_light_positions[u_index] - world_pos);
+		vec3 R = reflect(-L, N);
+
+		float light_dist = distance(u_light_positions[u_index], world_pos);
+		vec3 light_attenuation = (u_light_intensities[u_index] * u_light_colors[u_index]) / (1.0+(light_dist*light_dist));
+
+		
+			outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation;
+			outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation;
+
+	// resulting_color = (ambeint + diffuse + specular) * base_color
+	color *= vec4(outgoing_light, 1.0);
+
+	FragColor = color;
+}
+
+
+\first_pass.fs
+#version 330 core
+
+in vec2 v_uv;
+
+uniform mat4 u_inv_vp_mat;
+
+uniform sampler2D u_gbuffer_albedo;
+uniform sampler2D u_gbuffer_normal;
+uniform sampler2D u_gbuffer_depth;
+
+uniform mat4 u_shadow_vp;
+uniform sampler2D u_shadowmap;
+
+uniform mat4 u_shadow_vp1;
+uniform sampler2D u_shadowmap1;
+
+uniform vec3 u_camera_position;
+
+uniform vec2 u_res_inv;
+
+out vec4 FragColor;
+
+// Lighing
+uniform vec3 u_ambient_light;
+
+uniform vec3 u_light_dir;
+uniform vec3 u_light_color;
+uniform float u_light_intensity;
+
+uniform int u_index;
+
+float get_shadow_depth(vec3 world_pos) {
+	vec4 fragment_shadow = u_shadow_vp * vec4(world_pos, 1.0);
+	fragment_shadow = fragment_shadow / fragment_shadow.w;
+	vec2 frag_shadows_uv = ((fragment_shadow.xy) * 0.5) + vec2(0.5);
+
+	if (frag_shadows_uv.x < 0.0 && frag_shadows_uv.x > 1.0 && frag_shadows_uv.y < 0.0 && frag_shadows_uv.y > 1.0) {
+		return 0.0;
+	}
+
+	float shadow_map_depth = texture(u_shadowmap, frag_shadows_uv).x;
+	float frag_depth = ((((fragment_shadow.z - 0.001))) * 0.5) + 0.5;
+	if (shadow_map_depth < frag_depth) {
+		return 0.0;
+	}
+
+	return 1.0;
+}
+
+void main()
+{
+	vec2 uv = gl_FragCoord.xy * u_res_inv;
+	
+	float depth = texture(u_gbuffer_depth, uv).r * 2.0 - 1.0;
+	vec4 color = texture(u_gbuffer_albedo, uv);
+	vec3 N = normalize(texture(u_gbuffer_normal, uv).rgb * 2.0 - 1.0);
+	float normal_w = texture(u_gbuffer_normal, uv).w;
+
+	vec2 uv_clip = uv * 2.0 -1.0;
+
+	vec4 not_norm_world_pos = u_inv_vp_mat * vec4(uv_clip.x, uv_clip.y, depth, 1.0);
+	vec3 world_pos = not_norm_world_pos.xyz / not_norm_world_pos.w;
+
+	// Ambient contributions
+	vec3 outgoing_light = u_ambient_light;
+
+	vec3 V = normalize(u_camera_position - world_pos);
+
+	// Evaluate light contribution
+		vec3 L = normalize(u_light_dir);
+		vec3 R = reflect(-L, N);
+
+		vec3 light_attenuation = (u_light_intensity * u_light_color);
+
+		float shadow = get_shadow_depth(world_pos);
+
+		// Diffuse contribution
+		outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation * shadow;
+		outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation * shadow;
+		
+
+	// resulting_color = (ambeint + diffuse + specular) * base_color
+	color *= vec4(outgoing_light, 1.0);
+
+	FragColor = color;
 }
