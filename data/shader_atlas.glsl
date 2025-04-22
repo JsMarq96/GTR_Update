@@ -161,8 +161,10 @@ const int MAX_LIGHT_COUNT = 10;
 uniform int u_light_count;
 uniform int u_light_type[MAX_LIGHT_COUNT];
 uniform vec3 u_light_positions[MAX_LIGHT_COUNT];
+uniform vec3 u_light_dirs[MAX_LIGHT_COUNT];
 uniform vec3 u_light_colors[MAX_LIGHT_COUNT];
 uniform float u_light_intensities[MAX_LIGHT_COUNT];
+uniform vec2 u_cone_data[MAX_LIGHT_COUNT];
 
 float get_shadow_depth(vec3 world_pos) {
 	vec4 fragment_shadow = u_shadow_vp * vec4(world_pos, 1.0);
@@ -170,13 +172,13 @@ float get_shadow_depth(vec3 world_pos) {
 	vec2 frag_shadows_uv = ((fragment_shadow.xy) * 0.5) + vec2(0.5);
 
 	if (frag_shadows_uv.x < 0.0 && frag_shadows_uv.x > 1.0 && frag_shadows_uv.y < 0.0 && frag_shadows_uv.y > 1.0) {
-		return 0.0;
+		return 1.0;
 	}
 
 	float shadow_map_depth = texture(u_shadowmap, frag_shadows_uv).x;
 	float frag_depth = ((((fragment_shadow.z - 0.0001))) * 0.5) + 0.5;
 	if (shadow_map_depth < frag_depth) {
-		return 0.0;
+		return 1.0;
 	}
 
 	return 1.0;
@@ -185,16 +187,16 @@ float get_shadow_depth(vec3 world_pos) {
 float get_shadow_depth1(vec3 world_pos) {
 	vec4 fragment_shadow = u_shadow_vp1 * vec4(world_pos, 1.0);
 	fragment_shadow = fragment_shadow / fragment_shadow.w;
-	vec2 frag_shadows_uv = ((fragment_shadow.xy) * 0.5) + vec2(0.5);
+	vec2 frag_shadows_uv = (vec2(fragment_shadow.x, fragment_shadow.y) * 0.5) + vec2(0.5);
 
 	if (frag_shadows_uv.x < 0.0 && frag_shadows_uv.x > 1.0 && frag_shadows_uv.y < 0.0 && frag_shadows_uv.y > 1.0) {
-		return 0.0;
+		return 1.0;
 	}
 
 	float shadow_map_depth = texture(u_shadowmap1, frag_shadows_uv).x;
 	float frag_depth = ((((fragment_shadow.z - 0.0001))) * 0.5) + 0.5;
 	if (shadow_map_depth < frag_depth) {
-		return 0.0;
+		return 1.0;
 	}
 
 	return 1.0;
@@ -218,19 +220,41 @@ void main()
 	vec3 V = normalize(u_camera_position - v_world_position);
 
 	// Evaluate light contribution
-	for(int i = 0; i < u_light_count; i++) {
+	for(int i = 0; i < 10; i++) {
+		if (u_light_count <= i) {
+			break;
+		}
 		vec3 L = normalize(u_light_positions[i] - v_world_position);
-		vec3 R = reflect(-L, N);
 
 		float light_dist = distance(u_light_positions[i], v_world_position);
-		vec3 light_attenuation = (u_light_intensities[i] * u_light_colors[i]) / (1.0+(light_dist*light_dist));
+		vec3 light_attenuation = (u_light_intensities[i] * u_light_colors[i]) / (1.0+(light_dist*light_dist));;
 
-		float shadow = get_shadow_depth(v_world_position);
+		if (u_light_type[i] == 3) {
+			L = normalize(u_light_dirs[i]);
+			light_attenuation = u_light_intensities[i] * u_light_colors[i] * get_shadow_depth(v_world_position);
+		} else if (u_light_type[i] == 2) {
+			vec2 cone_data = u_cone_data[i];
+			float minus_l_dot_d = clamp(dot(L, normalize(u_light_dirs[i])), 0.0, 1.0);
+
+			if (minus_l_dot_d >= (cone_data.x)) {
+				//light_attenuation *= vec3(pow(minus_l_dot_d, cone_data.y * 200.0));
+				light_attenuation *= clamp((minus_l_dot_d - cos(cone_data.y)) / (cos(cone_data.x)- cos(cone_data.y)), 0.0, 1.0) * get_shadow_depth1(v_world_position);
+
+				
+			} else {
+				light_attenuation = vec3(0.0);
+			}
+
+			//light_attenuation = vec3(minus_l_dot_d);
+		}
+
+		vec3 R = reflect(-L, N);
+
 
 		// Diffuse contribution
 		if (i == 3) {
-			outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation * shadow;
-			outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation * shadow;
+			outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation;
+			outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation;
 		} else {
 			outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation;
 			outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation;
