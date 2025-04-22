@@ -281,7 +281,6 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 
 		shader->enable();
 
-
 		shader->setUniform("u_shadow_vp", shadow_vp);
 		shader->setUniform("u_shadowmap", shadow_FBO.depth_texture, 1);
 
@@ -309,6 +308,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 		glDepthMask(GL_FALSE);
 		glBlendFunc(GL_ONE, GL_ONE);
 		glEnable(GL_BLEND);
+		glFrontFace(GL_CW);
 		for (int i = 0; i < scene_lights.size() -1; i++) {
 			LightEntity* light = scene_lights[i];
 
