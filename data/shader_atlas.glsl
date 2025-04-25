@@ -12,13 +12,10 @@ first_pas quad.vs first_pass.fs
 
 phong basic.vs phong.fs
 
-\test.cs
-#version 430 core
+\PBR
 
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-void main() 
-{
-	vec4 i = vec4(0.0);
+vec3 F_Schlick(vec3 v, vec3 h, vec3 f0) {
+	return f0 + (1.0 - f0) * pow(1.0 - dot(h, v), 5.0);
 }
 
 \basic.vs
@@ -572,6 +569,9 @@ uniform int u_light_type[MAX_LIGHT_COUNT];
 uniform vec3 u_light_positions[MAX_LIGHT_COUNT];
 uniform vec3 u_light_colors[MAX_LIGHT_COUNT];
 uniform float u_light_intensities[MAX_LIGHT_COUNT];
+uniform vec2 u_cone_data[MAX_LIGHT_COUNT];
+uniform vec3 u_light_dirs[MAX_LIGHT_COUNT];
+
 
 uniform int u_index;
 
@@ -614,14 +614,32 @@ void main()
 
 	// Evaluate light contribution
 		vec3 L = normalize(u_light_positions[u_index] - world_pos);
-		vec3 R = reflect(-L, N);
 
 		float light_dist = distance(u_light_positions[u_index], world_pos);
 		vec3 light_attenuation = (u_light_intensities[u_index] * u_light_colors[u_index]) / (1.0+(light_dist*light_dist));
 
-		
-			outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation;
-			outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation;
+		if (u_light_type[u_index] == 2) {
+			vec2 cone_data = u_cone_data[u_index];
+			float minus_l_dot_d = clamp(dot(L, normalize(u_light_dirs[u_index])), 0.0, 1.0);
+
+			if (minus_l_dot_d >= (cone_data.x)) {
+				//light_attenuation *= vec3(pow(minus_l_dot_d, cone_data.y * 200.0));
+				light_attenuation *= clamp((minus_l_dot_d - cos(cone_data.y)) / (cos(cone_data.x)- cos(cone_data.y)), 0.0, 1.0);
+
+				
+			} else {
+				light_attenuation = vec3(0.0);
+			}
+
+			//light_attenuation = vec3(minus_l_dot_d);
+		}
+
+		vec3 R = reflect(-L, N);
+
+
+		// Diffuse contribution
+		outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation;
+		outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation;
 
 	// resulting_color = (ambeint + diffuse + specular) * base_color
 	color *= vec4(outgoing_light, 1.0);

@@ -57,7 +57,7 @@ Renderer::Renderer(const char* shader_atlas_filename)
 
 	quad = GFX::Mesh::getQuad();
 
-	cone = GFX::Mesh::Get("data/meshes/cone.obj");
+	//cone = GFX::Mesh::Get("data/meshes/cone.obj");
 
 	sphere.createSphere(0.50f);
 }
@@ -234,8 +234,9 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 		vec3 light_positions[10];
 		vec3 light_colors[10];
 		float light_intensities[10];
-		float light_types[10];
+		int light_types[10];
 		vec3 light_dir[10];
+		vec2 cone_data[10];
 
 		int i = 0;
 		for (LightEntity* light : scene_lights) {
@@ -243,7 +244,9 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 			light_colors[i] = light->color;
 			light_intensities[i] = light->intensity;
 			light_types[i] = light->light_type;
-			light_dir[i] = light->root.model * vec3(0.0f, 0.0f, -1.0f);
+			light_dir[i] = light->root.model.frontVector();
+			cone_data[i] = vec2(DEG2RAD * light->cone_info.x, DEG2RAD * light->cone_info.y);
+
 			i++;
 		}
 
@@ -290,8 +293,10 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 		shader->setUniform3Array("u_light_positions", (float*)light_positions, min(10, scene_lights.size()));
 		shader->setUniform3Array("u_light_colors", (float*)light_colors, min(10, scene_lights.size()));
 		shader->setUniform1Array("u_light_intensities", (float*)light_intensities, min(10, scene_lights.size()));
-		shader->setUniform1Array("u_light_type", (float*)light_types, min(10, scene_lights.size()));
+		shader->setUniform1Array("u_light_type", light_types, min(10, scene_lights.size()));
 		shader->setUniform1("u_light_count", (int)scene_lights.size());
+		shader->setUniform2Array("u_cone_data", (float*)cone_data, 10);
+		shader->setUniform3Array("u_light_dirs", (float*)light_dir, 10);
 		
 		shader->setUniform("u_inv_vp_mat", vp_inv);
 		shader->setUniform("u_camera_position", camera->eye);
@@ -327,6 +332,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 		glDepthMask(GL_TRUE);
 		glDepthFunc(GL_LEQUAL);
 		glDisable(GL_BLEND);
+		glFrontFace(GL_CCW);
 		shader->disable();
 
 		light_buffer.unbind();
