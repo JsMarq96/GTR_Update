@@ -14,8 +14,42 @@ phong basic.vs phong.fs
 
 \PBR
 
+const int PI = 3.14159265;
+
 vec3 F_Schlick(vec3 v, vec3 h, vec3 f0) {
 	return f0 + (1.0 - f0) * pow(1.0 - dot(h, v), 5.0);
+}
+
+vec3 D_ggx(float alpha, vec3 n, vec3 h) {
+	float alpha_2 = alpha * alpha;
+	float n_dot_h = dot(n,h);
+	float dem = (n_dot_h*n_dot_h) * (alpha_2 - 1.0) + 1.0;
+	return alpha_2 / (PI * dem * dem);
+}
+
+vec3 schlick_ggx(float k, vec3 v, vec3 n) {
+	float n_dot_v = dot(n,v);
+	return n_dot_v / (n_dot_v * (1.0-k) + k);
+}
+
+vec3 G_smith(float alpha, vec3 l, vec3 v, vec3 n) {
+	float k = alpha / 2.0;
+	return schlick_ggx(k, l, n) * schlick_ggx(k, v, n);
+}
+
+vec3 brdf_cook_torrance(vec3 albedo, float roughness, float metalness, vec3 n, vec3 h, vec3 l, vec3 v) {
+	vec3 diffuse = albedo / PI;
+
+	vec3 F0 = mix(vec3(0.04), albedo, metalness);
+	float alpha = roughness * roughness; 
+
+	vec3 F = F_Schlick(v, h, F0);
+	vec3 G = G_smith(alpha, l, v, n);
+	vec3 D = D_ggx(alpha, n, h);
+
+	vec3 specular = (F * D * G) / (4.0 * dot(l, n) * dot(l, v));
+
+	return diffuse + specular;
 }
 
 \basic.vs
@@ -659,6 +693,7 @@ uniform sampler2D u_gbuffer_albedo;
 uniform sampler2D u_gbuffer_normal;
 uniform sampler2D u_gbuffer_depth;
 
+
 uniform mat4 u_shadow_vp;
 uniform sampler2D u_shadowmap;
 
@@ -679,6 +714,8 @@ uniform vec3 u_light_color;
 uniform float u_light_intensity;
 
 uniform int u_index;
+
+#include "PBR"
 
 float get_shadow_depth(vec3 world_pos) {
 	vec4 fragment_shadow = u_shadow_vp * vec4(world_pos, 1.0);
@@ -707,6 +744,10 @@ void main()
 	vec3 N = normalize(texture(u_gbuffer_normal, uv).rgb * 2.0 - 1.0);
 	float normal_w = texture(u_gbuffer_normal, uv).w;
 
+	vec3 albedo = color.xyz;
+	float roughness = color.w;
+	float metalness = normal_w;
+
 	vec2 uv_clip = uv * 2.0 -1.0;
 
 	vec4 not_norm_world_pos = u_inv_vp_mat * vec4(uv_clip.x, uv_clip.y, depth, 1.0);
@@ -720,15 +761,14 @@ void main()
 	// Evaluate light contribution
 		vec3 L = normalize(u_light_dir);
 		vec3 R = reflect(-L, N);
+		vec3 H = normalize(V + L);
 
 		vec3 light_attenuation = (u_light_intensity * u_light_color);
 
 		float shadow = get_shadow_depth(world_pos);
 
-		// Diffuse contribution
-		outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation * shadow;
-		outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation * shadow;
-		
+		vec3 direct_light = brdf_cook_torrance(albedo, roughness, metalness, N, H, L, V);
+		outgoing_light += clamp(dot(L, N), 0.0, 1.0) * direct_light * light_attenuation * shadow;		
 
 	// resulting_color = (ambeint + diffuse + specular) * base_color
 	color *= vec4(outgoing_light, 1.0);
