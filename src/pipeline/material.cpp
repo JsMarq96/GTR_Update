@@ -94,10 +94,19 @@ void Material::bind(GFX::Shader* shader) {
 		if (texture == NULL)
 			texture = GFX::Texture::getWhiteTexture(); //a 1x1 white texture
 
+		GFX::Texture* normal_texture = textures[SCN::eTextureChannel::NORMALMAP].texture;
+		GFX::Texture* mer_texture = textures[SCN::eTextureChannel::METALLIC_ROUGHNESS].texture;
+
 		shader->setUniform("u_color", color);
 
 		if (texture)
 			shader->setUniform("u_texture", texture, 0);
+
+		if (normal_texture)
+			shader->setUniform("u_normalmap", normal_texture, 1);
+
+		if (mer_texture)
+			shader->setUniform("u_mrmap", mer_texture, 2);
 
 		// This is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 		shader->setUniform("u_alpha_cutoff", alpha_mode == SCN::eAlphaMode::MASK ? alpha_cutoff : 0.001f);

@@ -58,7 +58,6 @@ Renderer::Renderer(const char* shader_atlas_filename)
 	quad = GFX::Mesh::getQuad();
 
 	//cone = GFX::Mesh::Get("data/meshes/cone.obj");
-
 	sphere.createSphere(0.50f);
 }
 
@@ -190,10 +189,10 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 		}
 
 		shader->setUniform("u_shadow_vp", shadow_vp);
-		shader->setUniform("u_shadowmap", shadow_FBO.depth_texture, 1);
+		shader->setUniform("u_shadowmap", shadow_FBO.depth_texture, 3);
 
 		shader->setUniform("u_shadow_vp1", shadow_vp1);
-		shader->setUniform("u_shadowmap1", shadow_FBO1.depth_texture, 2);
+		shader->setUniform("u_shadowmap1", shadow_FBO1.depth_texture, 4);
 
 		shader->setUniform3Array("u_light_positions", (float*)light_positions, min(10, scene_lights.size()));
 		shader->setUniform3Array("u_light_colors", (float*)light_colors, min(10, scene_lights.size()));
@@ -254,7 +253,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 		first_shader->enable();
 
 		first_shader->setUniform("u_shadow_vp", shadow_vp);
-		first_shader->setUniform("u_shadowmap", shadow_FBO.depth_texture, 1);
+		first_shader->setUniform("u_shadowmap", shadow_FBO.depth_texture, 4);
 		first_shader->setUniform3("u_ambient_light", vec3(0.0));
 
 		// Upload camera uniforms
@@ -524,10 +523,10 @@ void Renderer::renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX:
 	shader->setUniform3("u_ambient_light", scene->ambient_light);
 
 	shader->setUniform("u_shadow_vp", shadow_vp);
-	shader->setUniform("u_shadowmap", shadow_FBO.depth_texture, 1);
+	shader->setUniform("u_shadowmap", shadow_FBO.depth_texture,3);
 
 	shader->setUniform("u_shadow_vp1", shadow_vp1);
-	shader->setUniform("u_shadowmap1", shadow_FBO1.depth_texture, 2);
+	shader->setUniform("u_shadowmap1", shadow_FBO1.depth_texture, 4);
 
 	//upload uniforms
 	shader->setUniform("u_model", model);

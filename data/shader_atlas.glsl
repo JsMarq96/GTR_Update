@@ -14,25 +14,25 @@ phong basic.vs phong.fs
 
 \PBR
 
-const int PI = 3.14159265;
+float PI = 3.14159265;
 
 vec3 F_Schlick(vec3 v, vec3 h, vec3 f0) {
-	return f0 + (1.0 - f0) * pow(1.0 - dot(h, v), 5.0);
+	return f0 + (1.0 - f0) * pow(1.0 - clamp(dot(h, v), 0.0, 1.0), 5.0);
 }
 
-vec3 D_ggx(float alpha, vec3 n, vec3 h) {
+float D_ggx(float alpha, vec3 n, vec3 h) {
 	float alpha_2 = alpha * alpha;
-	float n_dot_h = dot(n,h);
+	float n_dot_h = clamp(dot(n,h), 0.0, 1.0);
 	float dem = (n_dot_h*n_dot_h) * (alpha_2 - 1.0) + 1.0;
-	return alpha_2 / (PI * dem * dem);
+	return alpha_2 / (PI * dem * dem + 0.0001);
 }
 
-vec3 schlick_ggx(float k, vec3 v, vec3 n) {
-	float n_dot_v = dot(n,v);
-	return n_dot_v / (n_dot_v * (1.0-k) + k);
+float schlick_ggx(float k, vec3 v, vec3 n) {
+	float n_dot_v = clamp(dot(n,v), 0.0, 1.0);
+	return n_dot_v / (n_dot_v * (1.0-k) + k + 0.0001);
 }
 
-vec3 G_smith(float alpha, vec3 l, vec3 v, vec3 n) {
+float G_smith(float alpha, vec3 l, vec3 v, vec3 n) {
 	float k = alpha / 2.0;
 	return schlick_ggx(k, l, n) * schlick_ggx(k, v, n);
 }
@@ -42,14 +42,14 @@ vec3 brdf_cook_torrance(vec3 albedo, float roughness, float metalness, vec3 n, v
 
 	vec3 F0 = mix(vec3(0.04), albedo, metalness);
 	float alpha = roughness * roughness; 
-
+	
 	vec3 F = F_Schlick(v, h, F0);
-	vec3 G = G_smith(alpha, l, v, n);
-	vec3 D = D_ggx(alpha, n, h);
+	float G = G_smith(alpha, l, v, n);
+	float D = D_ggx(alpha, n, h);
 
-	vec3 specular = (F * D * G) / (4.0 * dot(l, n) * dot(l, v));
+	vec3 specular = (F*G*D) / ((4.0 * clamp(dot(l, n), 0.0, 1.0) * clamp(dot(n, v), 0.0, 1.0)) + 0.0001);
 
-	return diffuse + specular;
+	return specular + diffuse;
 }
 
 \basic.vs
@@ -175,6 +175,8 @@ in vec4 v_color;
 
 uniform vec4 u_color;
 uniform sampler2D u_texture;
+uniform sampler2D u_normalmap;
+uniform sampler2D u_mrmap;
 uniform float u_time;
 uniform float u_alpha_cutoff;
 uniform vec3 u_camera_position;
@@ -189,13 +191,15 @@ void main()
 	vec4 color = u_color;
 	color *= texture2D( u_texture, uv );
 
+	vec4 material = texture2D(u_mrmap, uv);
+
 	if(color.a < u_alpha_cutoff)
 		discard;
 
 	vec3 N = normalize(v_normal);
 
-	gbuffer_albedo = color;
-	gbuffer_normal_mat = vec4(N * 0.5 + 0.5, 64.0);
+	gbuffer_albedo = vec4(color.xyz, material.r);
+	gbuffer_normal_mat = vec4(N * 0.5 + 0.5, material.g);
 }
 
 \deferred_light.fs
@@ -594,6 +598,8 @@ uniform vec2 u_res_inv;
 
 out vec4 FragColor;
 
+#include "PBR"
+
 // Lighing
 uniform vec3 u_ambient_light;
 
@@ -636,6 +642,10 @@ void main()
 	vec3 N = normalize(texture(u_gbuffer_normal, uv).rgb * 2.0 - 1.0);
 	float normal_w = texture(u_gbuffer_normal, uv).w;
 
+	vec3 albedo = color.xyz;
+	float roughness = color.w;
+	float metalness = normal_w;
+
 	vec2 uv_clip = uv * 2.0 -1.0;
 
 	vec4 not_norm_world_pos = u_inv_vp_mat * vec4(uv_clip.x, uv_clip.y, depth, 1.0);
@@ -669,11 +679,11 @@ void main()
 		}
 
 		vec3 R = reflect(-L, N);
+		vec3 H = normalize(V + L);
 
-
+		vec3 direct_light = brdf_cook_torrance(albedo, roughness, metalness, N, H, L, V);
 		// Diffuse contribution
-		outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation;
-		outgoing_light += pow(clamp(dot(R, V), 0.0, 1.0), 64.0) * light_attenuation;
+		outgoing_light += clamp(dot(L, N), 0.0, 1.0) * light_attenuation * direct_light;
 
 	// resulting_color = (ambeint + diffuse + specular) * base_color
 	color *= vec4(outgoing_light, 1.0);
@@ -760,7 +770,7 @@ void main()
 
 	// Evaluate light contribution
 		vec3 L = normalize(u_light_dir);
-		vec3 R = reflect(-L, N);
+		vec3 R = normalize(reflect(-L, N));
 		vec3 H = normalize(V + L);
 
 		vec3 light_attenuation = (u_light_intensity * u_light_color);
