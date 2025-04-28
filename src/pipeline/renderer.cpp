@@ -553,11 +553,12 @@ void Renderer::renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX:
 	glDisable(GL_BLEND);
 	glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
 
-	/*delete[] light_positions;
+	delete[] light_positions;
 	delete[] light_intensities;
 	delete[] light_types;
 	delete[] light_colors;
-	delete[] cone_data;*/
+	delete[] cone_data;
+	delete[] light_dirs;
 }
 
 #ifndef SKIP_IMGUI

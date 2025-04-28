@@ -95,7 +95,11 @@ void Material::bind(GFX::Shader* shader) {
 			texture = GFX::Texture::getWhiteTexture(); //a 1x1 white texture
 
 		GFX::Texture* normal_texture = textures[SCN::eTextureChannel::NORMALMAP].texture;
+		if (normal_texture == NULL)
+			normal_texture = GFX::Texture::getWhiteTexture();
 		GFX::Texture* mer_texture = textures[SCN::eTextureChannel::METALLIC_ROUGHNESS].texture;
+		if (mer_texture == NULL)
+			mer_texture = GFX::Texture::getWhiteTexture();
 
 		shader->setUniform("u_color", color);
 
