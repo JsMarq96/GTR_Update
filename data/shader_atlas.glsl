@@ -17,19 +17,19 @@ phong basic.vs phong.fs
 float PI = 3.14159265;
 
 vec3 F_Schlick(vec3 v, vec3 n, vec3 f0) {
-	return f0 + (1.0 - f0) * pow(1.0 - clamp(dot(n, v), 0.0001, 1.0), 5.0);
+	return f0 + (1.0 - f0) * pow(1.0 -  clamp(dot(n, v), 0.0001, 1.0), 5.0);
 }
 
 float D_ggx(float alpha, vec3 n, vec3 h) {
 	float alpha_2 = alpha * alpha;
-	float n_dot_h = clamp(dot(n,h), 0.0001, 1.0);
+	float n_dot_h = clamp(dot(n,h), 0.000, 1.0);
 	float dem = (n_dot_h*n_dot_h) * (alpha_2 - 1.0) + 1.0;
-	return alpha_2 / (PI * dem * dem + 0.0001);
+	return alpha_2 / (PI * dem * dem);
 }
 
 float schlick_ggx(float k, vec3 v, vec3 n) {
 	float n_dot_v = clamp(dot(n,v), 0.0001, 1.0);
-	return n_dot_v / (n_dot_v * (1.0-k) + k + 0.0001);
+	return n_dot_v / (n_dot_v * (1.0-k) + k);
 }
 
 float G_smith(float alpha, vec3 l, vec3 v, vec3 n) {
@@ -38,18 +38,18 @@ float G_smith(float alpha, vec3 l, vec3 v, vec3 n) {
 }
 
 vec3 brdf_cook_torrance(vec3 albedo, float roughness, float metalness, vec3 n, vec3 h, vec3 l, vec3 v) {
-	vec3 diffuse = albedo / PI;
-
 	vec3 F0 = mix(vec3(0.04), albedo, metalness);
 	float alpha = roughness * roughness; 
+
+	vec3 diffuse = albedo / PI;
 	
-	vec3 F = F_Schlick(v, h, F0);
+	vec3 F = F_Schlick(h, v, F0);
 	float G = G_smith(alpha, l, v, n);
 	float D = D_ggx(alpha, n, h);
 
-	vec3 specular = (F * G * D) / ((4.0 * clamp(dot(n, l), 0.0001, 1.0) * clamp(dot(n, v), 0.00001, 1.0)));
+	vec3 specular = (F * G * D) / ((4.0 * clamp(dot(n, l), 0.0001, 1.0) * clamp(dot(n, v), 0.0001, 1.0)));
 
-	return specular + diffuse; 
+	return diffuse + specular; 
 }
 
 \basic.vs
@@ -198,8 +198,8 @@ void main()
 
 	vec3 N = normalize(v_normal);
 
-	gbuffer_albedo = vec4(color.xyz, material.b); // Roughness
-	gbuffer_normal_mat = vec4(N * 0.5 + 0.5, material.g); // Metalness
+	gbuffer_albedo = vec4(color.xyz, material.g); // Roughness
+	gbuffer_normal_mat = vec4(N * 0.5 + 0.5, material.b); // Metalness
 }
 
 \deferred_light.fs
