@@ -9,6 +9,8 @@ multi basic.vs multi.fs
 gbuffer_fill basic.vs gbuffer_fill.fs
 light_volume basic.vs light_volume.fs
 first_pas quad.vs first_pass.fs
+ssao_pass quad.vs ssao_pass.fs
+
 
 phong basic.vs phong.fs
 
@@ -689,6 +691,63 @@ void main()
 	color *= vec4(outgoing_light, 1.0);
 
 	FragColor = color;
+}
+
+\ssao_pass.fs
+#version 330 core
+
+in vec2 v_uv;
+
+uniform mat4 u_vp_mat;
+uniform mat4 u_inv_vp_mat;
+
+uniform sampler2D u_gbuffer_normal;
+uniform sampler2D u_gbuffer_depth;
+
+uniform vec2 u_res_inv;
+
+const int MAX_SAMPLE_COUNT = 30;
+uniform int u_sample_count;
+uniform vec3 u_sample_pos[MAX_SAMPLE_COUNT];
+uniform float u_sample_radius;
+
+out vec4 FragColor;
+
+void main()
+{
+	vec2 uv = gl_FragCoord.xy * u_res_inv;
+
+	float sample_radius = 0.1;
+	
+	float depth = texture(u_gbuffer_depth, uv).r * 2.0 - 1.0;
+	vec3 N = normalize(texture(u_gbuffer_normal, uv).rgb * 2.0 - 1.0);
+
+	vec2 uv_clip = uv * 2.0 -1.0;
+
+	vec4 not_norm_world_pos = u_inv_vp_mat * vec4(uv_clip.x, uv_clip.y, depth, 1.0);
+	vec3 world_pos = not_norm_world_pos.xyz / not_norm_world_pos.w;
+
+	float ao_term = 0.0;
+
+	for(int i = 0; i < 15; i++) {
+		vec3 sample_pos = u_sample_pos[i] * sample_radius + world_pos;
+
+		vec4 proj_sample = u_vp_mat * vec4(sample_pos, 1.0);
+		proj_sample /= proj_sample.w;
+
+		float sample_proj_depth = texture(u_gbuffer_depth, proj_sample.xy * 0.5 + 0.5).r * 2.0 - 1.0;
+
+		vec3 depth_sample = vec3(proj_sample.xy, sample_proj_depth);
+
+		float sample_dist = distance(depth_sample, proj_sample.xyz);
+		if (sample_proj_depth > proj_sample.z && sample_dist < sample_radius) {
+			ao_term += 1.0;
+		}
+	}
+
+	ao_term /= float(u_sample_count);
+
+	FragColor = vec4(ao_term);
 }
 
 

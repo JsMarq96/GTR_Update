@@ -43,6 +43,9 @@ namespace SCN {
 		GFX::FBO shadow_FBO1;
 		mat4 shadow_vp1;
 
+		std::vector<vec3> ao_sample_points;
+		GFX::FBO ssao_FBO;
+
 		bool render_wireframe;
 		bool render_boundaries;
 
@@ -76,6 +79,8 @@ namespace SCN {
 		void renderSkybox(GFX::Texture* cubemap);
 
 		void renderShadowMap(mat4& shadow_viewproj, GFX::FBO& shadow_target, LightEntity* light);
+
+		void computeSSAO(Camera* camera);
 
 		//to render one mesh given its material and transformation matrix
 		void renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material, std::vector<LightEntity*> &lights_to_render);

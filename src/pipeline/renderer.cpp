@@ -23,6 +23,33 @@ using namespace SCN;
 //some globals
 GFX::Mesh sphere;
 
+
+std::vector<vec3> generateSpherePoints(int num, float radius, bool hemi)
+{
+	std::vector<vec3> points;
+	points.resize(num);
+	for (int i = 0; i < num; i += 1)
+	{
+		vec3& p = points[i];
+		float u = random();
+		float v = random();
+		float theta = u * 2.0 * PI;
+		float phi = acos(2.0 * v - 1.0);
+		float r = cbrt(random() * 0.9 + 0.1) * radius;
+		float sinTheta = sin(theta);
+		float cosTheta = cos(theta);
+		float sinPhi = sin(phi);
+		float cosPhi = cos(phi);
+		p.x = r * sinPhi * cosTheta;
+		p.y = r * sinPhi * sinTheta;
+		p.z = r * cosPhi;
+		if (hemi && p.z < 0)
+			p.z *= -1.0;
+	}
+	return points;
+}
+
+
 Renderer::Renderer(const char* shader_atlas_filename)
 {
 	render_wireframe = false;
@@ -54,6 +81,16 @@ Renderer::Renderer(const char* shader_atlas_filename)
 		GL_RGBA,
 		GL_FLOAT,
 		true);
+
+	ssao_FBO.create(
+		win_wise.x,
+		win_wise.y,
+		1,
+		GL_RGB,
+		GL_UNSIGNED_BYTE,
+		true);
+
+	ao_sample_points = generateSpherePoints(30, 0.50f, true);
 
 	quad = GFX::Mesh::getQuad();
 
@@ -166,6 +203,8 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 	//gbuffer.color_textures[0]->toViewport();
 
 	// Light pass ===============
+
+	computeSSAO(camera);
 
 	if (use_deffered_singlepass) {
 		GFX::Shader* shader = GFX::Shader::Get("deferred_light");
@@ -559,6 +598,42 @@ void Renderer::renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX:
 	delete[] light_colors;
 	delete[] cone_data;
 	delete[] light_dirs;
+}
+
+void Renderer::computeSSAO(Camera* camera) {
+	int sample_count = 16;
+	float ao_radius = 0.01f;
+
+	ssao_FBO.bind();
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	GFX::Shader* ao_shader = GFX::Shader::Get("ssao_pass");
+
+	ao_shader->enable();
+
+	ao_shader->setUniform("u_sample_count", sample_count);
+	ao_shader->setUniform("u_sample_radius", ao_radius);
+	ao_shader->setUniform3Array("u_sample_pos", (float*) &ao_sample_points[0], sample_count);
+
+	mat4 vp = camera->viewprojection_matrix;
+	mat4 vp_inv = vp;
+	vp_inv.inverse();
+
+	ao_shader->setUniform("u_vp_mat", vp);
+	ao_shader->setUniform("u_inv_vp_mat", vp_inv);
+
+	Vector2ui win_wise = CORE::getWindowSize();
+	ao_shader->setUniform("u_res_inv", vec2(1.0f / win_wise.x, 1.0f / win_wise.y));
+
+	ao_shader->setTexture("u_gbuffer_normal", gbuffer.color_textures[1], 6);
+	ao_shader->setTexture("u_gbuffer_depth", gbuffer.depth_texture, 7);
+
+	quad->render(GL_TRIANGLES);
+
+	ao_shader->disable();
+
+	ssao_FBO.unbind();
 }
 
 #ifndef SKIP_IMGUI
