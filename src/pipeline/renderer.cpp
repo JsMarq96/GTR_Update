@@ -533,39 +533,6 @@ void Renderer::renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX:
 
 	material->bind(shader);
 
-	// Upload light data
-	vec2* cone_data = new vec2[lights_to_render.size()];
-	vec3* light_positions = new vec3[lights_to_render.size()];
-	vec3* light_dirs = new vec3[lights_to_render.size()];
-	vec3* light_colors = new vec3[lights_to_render.size()];
-	float* light_intensities = new float[lights_to_render.size()];
-	int* light_types = new int[lights_to_render.size()];
-
-	int i = 0;
-	for (LightEntity* light : lights_to_render) {
-		light_dirs[i] = light->root.model.frontVector();
-		light_positions[i] = light->root.model.getTranslation();
-		light_colors[i] = light->color;
-		light_intensities[i] = light->intensity;
-		light_types[i] = light->light_type;
-		cone_data[i] = vec2(DEG2RAD * light->cone_info.x, DEG2RAD * light->cone_info.y);
-		i++;
-	}
-
-	shader->setUniform2Array("u_cone_data", (float*)cone_data, min(10, lights_to_render.size()));
-	shader->setUniform3Array("u_light_dirs", (float*)light_dirs, min(10, lights_to_render.size()));
-	shader->setUniform3Array("u_light_positions", (float*)light_positions, min(10, lights_to_render.size()));
-	shader->setUniform3Array("u_light_colors", (float*)light_colors, min(10, lights_to_render.size()));
-	shader->setUniform1Array("u_light_intensities", (float*)light_intensities, min(10, lights_to_render.size()));
-	shader->setUniform1Array("u_light_type", (int*)light_types, min(10, lights_to_render.size()));
-	shader->setUniform1("u_light_count", (int) lights_to_render.size());
-	shader->setUniform3("u_ambient_light", scene->ambient_light);
-
-	shader->setUniform("u_shadow_vp", shadow_vp);
-	shader->setUniform("u_shadowmap", shadow_FBO.depth_texture,3);
-
-	shader->setUniform("u_shadow_vp1", shadow_vp1);
-	shader->setUniform("u_shadowmap1", shadow_FBO1.depth_texture, 4);
 
 	//upload uniforms
 	shader->setUniform("u_model", model);
@@ -582,6 +549,7 @@ void Renderer::renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX:
 	if (render_wireframe)
 		glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 
+	glDisable(GL_BLEND);
 	//do the draw call that renders the mesh into the screen
 	mesh->render(GL_TRIANGLES);
 
@@ -591,13 +559,6 @@ void Renderer::renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX:
 	//set the render state as it was before to avoid problems with future renders
 	glDisable(GL_BLEND);
 	glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
-
-	delete[] light_positions;
-	delete[] light_intensities;
-	delete[] light_types;
-	delete[] light_colors;
-	delete[] cone_data;
-	delete[] light_dirs;
 }
 
 void Renderer::computeSSAO(Camera* camera) {
@@ -616,18 +577,26 @@ void Renderer::computeSSAO(Camera* camera) {
 	ao_shader->setUniform("u_sample_radius", ao_radius);
 	ao_shader->setUniform3Array("u_sample_pos", (float*) &ao_sample_points[0], sample_count);
 
-	mat4 vp = camera->viewprojection_matrix;
+	mat4 vp = camera->projection_matrix;
 	mat4 vp_inv = vp;
 	vp_inv.inverse();
 
-	ao_shader->setUniform("u_vp_mat", vp);
-	ao_shader->setUniform("u_inv_vp_mat", vp_inv);
+	ao_shader->setUniform("u_p_mat", vp);
+	ao_shader->setUniform("u_inv_p_mat", vp_inv);
+	ao_shader->setUniform("u_v_mat", camera->view_matrix);
 
 	Vector2ui win_wise = CORE::getWindowSize();
 	ao_shader->setUniform("u_res_inv", vec2(1.0f / win_wise.x, 1.0f / win_wise.y));
 
 	ao_shader->setTexture("u_gbuffer_normal", gbuffer.color_textures[1], 6);
 	ao_shader->setTexture("u_gbuffer_depth", gbuffer.depth_texture, 7);
+
+	//disable using mipmaps
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+	//enable bilinear filtering
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
 
 	quad->render(GL_TRIANGLES);
 

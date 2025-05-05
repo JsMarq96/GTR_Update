@@ -698,8 +698,9 @@ void main()
 
 in vec2 v_uv;
 
-uniform mat4 u_vp_mat;
-uniform mat4 u_inv_vp_mat;
+uniform mat4 u_v_mat;
+uniform mat4 u_p_mat;
+uniform mat4 u_inv_p_mat;
 
 uniform sampler2D u_gbuffer_normal;
 uniform sampler2D u_gbuffer_depth;
@@ -713,39 +714,71 @@ uniform float u_sample_radius;
 
 out vec4 FragColor;
 
+vec3 get_view_pos_from_UVs(vec2 uv, float z_delta) {
+	float depth = texture(u_gbuffer_depth, uv * 0.5 + 0.5).r;
+
+	vec4 clip_coords = vec4(uv.x * 2.0 - 1.0, uv.y* 2.0 - 1.0, depth* 2.0 - 1.0, 1.0);
+
+	vec4 not_norm_view_coord = u_inv_p_mat * clip_coords;
+
+	return (not_norm_view_coord.xyz + vec3(0.0, 0.0, z_delta)) / not_norm_view_coord.w;
+}
+
 void main()
 {
 	vec2 uv = gl_FragCoord.xy * u_res_inv;
 
-	float sample_radius = 0.1;
+	float sample_radius = 0.01;
 	
-	float depth = texture(u_gbuffer_depth, uv).r * 2.0 - 1.0;
 	vec3 N = normalize(texture(u_gbuffer_normal, uv).rgb * 2.0 - 1.0);
+
+	float depth = texture(u_gbuffer_depth, uv * 0.5 + 0.5).r;
+
+	if (depth >= 1.0) {
+		FragColor = vec4(1.0);
+		return;
+	}
 
 	vec2 uv_clip = uv * 2.0 -1.0;
 
-	vec4 not_norm_world_pos = u_inv_vp_mat * vec4(uv_clip.x, uv_clip.y, depth, 1.0);
-	vec3 world_pos = not_norm_world_pos.xyz / not_norm_world_pos.w;
+	vec3 view_pos = get_view_pos_from_UVs(uv, 0.0);
+
+	vec3 normal_view = (u_v_mat * vec4(N, 0.0)).xyz;
 
 	float ao_term = 0.0;
+	float sample_count = 0.0;
 
 	for(int i = 0; i < 15; i++) {
-		vec3 sample_pos = u_sample_pos[i] * sample_radius + world_pos;
+		vec3 sample_pos = u_sample_pos[i] * sample_radius + view_pos;
 
-		vec4 proj_sample = u_vp_mat * vec4(sample_pos, 1.0);
+		//sample_pos += normal_view  * 0.0001;
+
+		vec4 proj_sample = u_p_mat * vec4(sample_pos, 1.0);
 		proj_sample /= proj_sample.w;
 
-		float sample_proj_depth = texture(u_gbuffer_depth, proj_sample.xy * 0.5 + 0.5).r * 2.0 - 1.0;
+		vec3 reconstructed_sample = get_view_pos_from_UVs(proj_sample.xy * 0.5 + 0.5, 0.000);
 
-		vec3 depth_sample = vec3(proj_sample.xy, sample_proj_depth);
+		float sample_dist = abs(sample_pos.z - reconstructed_sample.z); //abs(distance(reconstructed_sample, sample_pos));
 
-		float sample_dist = distance(depth_sample, proj_sample.xyz);
-		if (sample_proj_depth > proj_sample.z && sample_dist < sample_radius) {
+
+
+		// Case 1: reconstructed pos closer than sample -> Occluded
+		//			reconstructed_sample < sample_pos
+		// Case 2: reconstructed pos further than sample -> Not occluded
+		//			reconstructed_sample > sample_pos
+
+		if (sample_dist > sample_radius) {
+			//continue;
+		}
+
+		sample_count += 1.0;
+
+		if (reconstructed_sample.z > sample_pos.z ) {
 			ao_term += 1.0;
 		}
 	}
 
-	ao_term /= float(u_sample_count);
+	ao_term /= sample_count;
 
 	FragColor = vec4(ao_term);
 }
