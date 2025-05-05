@@ -9,7 +9,7 @@
 
 std::vector<vec3> debug_points; //useful
 
-float cam_speed = 1.5;
+float cam_speed = 10.5;
 
 SceneEditor* editor = nullptr;
 

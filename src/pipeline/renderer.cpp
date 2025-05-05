@@ -83,14 +83,14 @@ Renderer::Renderer(const char* shader_atlas_filename)
 		true);
 
 	ssao_FBO.create(
-		win_wise.x,
-		win_wise.y,
+		win_wise.x/2,
+		win_wise.y/2,
 		1,
 		GL_RGB,
 		GL_UNSIGNED_BYTE,
 		true);
 
-	ao_sample_points = generateSpherePoints(30, 0.50f, true);
+	ao_sample_points = generateSpherePoints(30, 0.50f, false);
 
 	quad = GFX::Mesh::getQuad();
 
@@ -562,7 +562,7 @@ void Renderer::renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX:
 }
 
 void Renderer::computeSSAO(Camera* camera) {
-	int sample_count = 16;
+	int sample_count = 30;
 	float ao_radius = 0.01f;
 
 	ssao_FBO.bind();
@@ -586,16 +586,16 @@ void Renderer::computeSSAO(Camera* camera) {
 	ao_shader->setUniform("u_v_mat", camera->view_matrix);
 
 	Vector2ui win_wise = CORE::getWindowSize();
-	ao_shader->setUniform("u_res_inv", vec2(1.0f / win_wise.x, 1.0f / win_wise.y));
+	ao_shader->setUniform("u_res_inv", vec2(1.0f / ssao_FBO.color_textures[0]->width, 1.0f / ssao_FBO.color_textures[0]->width));
 
 	ao_shader->setTexture("u_gbuffer_normal", gbuffer.color_textures[1], 6);
 	ao_shader->setTexture("u_gbuffer_depth", gbuffer.depth_texture, 7);
 
-	//disable using mipmaps
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	////disable using mipmaps
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-	//enable bilinear filtering
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	////enable bilinear filtering
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 
 	quad->render(GL_TRIANGLES);

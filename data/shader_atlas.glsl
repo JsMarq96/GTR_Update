@@ -715,31 +715,29 @@ uniform float u_sample_radius;
 out vec4 FragColor;
 
 vec3 get_view_pos_from_UVs(vec2 uv, float z_delta) {
-	float depth = texture(u_gbuffer_depth, uv * 0.5 + 0.5).r;
+	float depth = texture(u_gbuffer_depth, uv).r;
 
-	vec4 clip_coords = vec4(uv.x * 2.0 - 1.0, uv.y* 2.0 - 1.0, depth* 2.0 - 1.0, 1.0);
+	vec4 clip_coords = vec4(uv.x * 2.0 - 1.0, uv.y * 2.0 - 1.0, depth* 2.0 - 1.0, 1.0);
 
 	vec4 not_norm_view_coord = u_inv_p_mat * clip_coords;
 
-	return (not_norm_view_coord.xyz + vec3(0.0, 0.0, z_delta)) / not_norm_view_coord.w;
+	return (not_norm_view_coord.xyz) / not_norm_view_coord.w;
 }
 
 void main()
 {
 	vec2 uv = gl_FragCoord.xy * u_res_inv;
 
-	float sample_radius = 0.01;
+	float sample_radius = 0.2;
 	
 	vec3 N = normalize(texture(u_gbuffer_normal, uv).rgb * 2.0 - 1.0);
 
-	float depth = texture(u_gbuffer_depth, uv * 0.5 + 0.5).r;
+	float depth = texture(u_gbuffer_depth, uv).r;
 
 	if (depth >= 1.0) {
 		FragColor = vec4(1.0);
 		return;
 	}
-
-	vec2 uv_clip = uv * 2.0 -1.0;
 
 	vec3 view_pos = get_view_pos_from_UVs(uv, 0.0);
 
@@ -773,7 +771,7 @@ void main()
 
 		sample_count += 1.0;
 
-		if (reconstructed_sample.z > sample_pos.z ) {
+		if (texture(u_gbuffer_depth, proj_sample.xy * 0.5 + 0.5).r > proj_sample.z * 0.5 + 0.5) {
 			ao_term += 1.0;
 		}
 	}
