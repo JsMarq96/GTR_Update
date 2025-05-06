@@ -735,23 +735,14 @@ vec3(-0.161931634, -0.269925982, -0.324702382)
 
 
 //from this github repo
-mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv)
+mat4 rotationMatrix( vec3 axis, float angle )
 {
-	// get edge vectors of the pixel triangle
-	vec3 dp1 = dFdx( p );
-	vec3 dp2 = dFdy( p );
-	vec2 duv1 = dFdx( uv );
-	vec2 duv2 = dFdy( uv );
-	
-	// solve the linear system
-	vec3 dp2perp = cross( dp2, N );
-	vec3 dp1perp = cross( N, dp1 );
-	vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
-	vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
- 
-	// construct a scale-invariant frame 
-	float invmax = inversesqrt( max( dot(T,T), dot(B,B) ) );
-	return mat3( T * invmax, B * invmax, N );
+    axis = normalize(axis);
+    float s = sin(angle);
+    float c = cos(angle);
+    float oc = 1.0 - c;
+    
+    return mat4(oc * axis.x * axis.x + c, oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0, oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c, oc * axis.y * axis.z - axis.x * s,  0.0,oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0, 0.0, 0.0, 0.0, 1.0);
 }
 
 
@@ -765,11 +756,16 @@ vec3 get_view_pos_from_UVs(vec2 uv, float z_delta) {
 	return (not_norm_view_coord.xyz + vec3(0.0, 0.0, z_delta)) / not_norm_view_coord.w;
 }
 
+float rand(vec2 co) {
+    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453123);
+}
+
+
 void main()
 {
 	vec2 uv = gl_FragCoord.xy * u_res_inv + 0.5 * u_res_inv;
 
-	float sample_radius = 0.08;
+	float sample_radius = 0.03;
 	
 	float depth = texture(u_gbuffer_depth, uv).r;
 
@@ -783,10 +779,20 @@ void main()
 	float ao_term = 0.0;
 	float sample_count = 0.0;
 
-	//mat3 rotmat = cotangent_frame( N, view_pos, uv );
+	vec3 N = normalize(texture(u_gbuffer_normal, uv).rgb * 2.0 - 1.0);
 
-	for(int i = 0; i < 30; i++) {
-		vec3 sample_pos = u_sample_pos[i] * sample_radius + view_pos;
+	N = (u_v_mat * vec4(N, 0.0)).xyz;
+
+	// TBN mat
+	vec3 rnd_vec = vec3(0.0, 1.0, 0.0);
+	vec3 t = normalize(rnd_vec - N * dot(rnd_vec, N));
+	vec3 b = cross(N, t);
+	mat3 rotmat = mat3(t,b,N);
+
+
+	for(int i = 0; i < 15; i++) {
+		//vec3 sample_pos = u_sample_pos[i] * sample_radius + view_pos;
+		vec3 sample_pos = (rotmat * u_sample_pos[i]) * sample_radius + view_pos;
 
 		//sample_pos += normal_view  * 0.0001;
 
@@ -799,14 +805,11 @@ void main()
 
 		float clip_depth = depth * 2.0 - 1.0;
 
-		vec4 pr = u_inv_p_mat * vec4(uv_clip, clip_depth, 1.0);
-		pr /= pr.w;
-
 		sample_count += 1.0;
 
 
 		if (clip_depth > (proj_sample.z)) {
-			ao_term += 1.0;// * smoothstep(0.0, 1.0, sample_radius / abs(sample_pos.z - pr.z));
+			ao_term += 1.0;
 		}
 	}
 

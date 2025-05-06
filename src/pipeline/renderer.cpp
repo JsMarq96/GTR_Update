@@ -90,7 +90,7 @@ Renderer::Renderer(const char* shader_atlas_filename)
 		GL_UNSIGNED_BYTE,
 		true);
 
-	ao_sample_points = generateSpherePoints(30, 1.0f, false);
+	ao_sample_points = generateSpherePoints(30, 1.0f, true);
 
 	quad = GFX::Mesh::getQuad();
 
