@@ -734,6 +734,27 @@ vec3(-0.161931634, -0.269925982, -0.324702382)
 };
 
 
+//from this github repo
+mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv)
+{
+	// get edge vectors of the pixel triangle
+	vec3 dp1 = dFdx( p );
+	vec3 dp2 = dFdy( p );
+	vec2 duv1 = dFdx( uv );
+	vec2 duv2 = dFdy( uv );
+	
+	// solve the linear system
+	vec3 dp2perp = cross( dp2, N );
+	vec3 dp1perp = cross( N, dp1 );
+	vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+	vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+ 
+	// construct a scale-invariant frame 
+	float invmax = inversesqrt( max( dot(T,T), dot(B,B) ) );
+	return mat3( T * invmax, B * invmax, N );
+}
+
+
 vec3 get_view_pos_from_UVs(vec2 uv, float z_delta) {
 	float depth = texture(u_gbuffer_depth, uv).r;
 
@@ -761,6 +782,8 @@ void main()
 
 	float ao_term = 0.0;
 	float sample_count = 0.0;
+
+	//mat3 rotmat = cotangent_frame( N, view_pos, uv );
 
 	for(int i = 0; i < 30; i++) {
 		vec3 sample_pos = u_sample_pos[i] * sample_radius + view_pos;
