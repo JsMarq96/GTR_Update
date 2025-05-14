@@ -90,7 +90,14 @@ Renderer::Renderer(const char* shader_atlas_filename)
 		GL_UNSIGNED_BYTE,
 		true);
 
-	ao_sample_points = generateSpherePoints(30, 1.0f, true);
+	volumetric_FBO.create(win_wise.x,
+		win_wise.y,
+		1,
+		GL_RGB,
+		GL_FLOAT,
+		false);
+
+	ao_sample_points = generateSpherePoints(64, 1.0f, true);
 
 	quad = GFX::Mesh::getQuad();
 
@@ -205,6 +212,7 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 	// Light pass ===============
 
 	computeSSAO(camera);
+	computeVolumetric(camera, scene_lights[3], scene->ambient_light);
 
 	if (use_deffered_singlepass) {
 		GFX::Shader* shader = GFX::Shader::Get("deferred_light");
@@ -310,6 +318,9 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 		first_shader->setTexture("u_gbuffer_normal", gbuffer.color_textures[1], 6);
 		first_shader->setTexture("u_gbuffer_depth", gbuffer.depth_texture, 7);
 
+		first_shader->setTexture("u_ssao_tex", ssao_FBO.color_textures[0], 8);
+
+
 		first_shader->setUniform("u_ambient_light", scene->ambient_light);
 		first_shader->setUniform("u_light_dir", light_dir[3]);
 		first_shader->setUniform("u_light_color", light_colors[3]);
@@ -376,7 +387,23 @@ void Renderer::renderScene(SCN::Scene* scene, Camera* camera)
 		light_buffer.unbind();
 	}
 
-	light_buffer.color_textures[0]->toViewport();
+	GFX::Shader* vol_compose_shader = GFX::Shader::Get("volumetric_comp");
+	if (!vol_compose_shader)
+		return;
+
+	glDisable(GL_DEPTH_TEST);
+
+	vol_compose_shader->enable();
+
+	vol_compose_shader->setUniform("u_final_light_tex", light_buffer.color_textures[0], 9);
+	vol_compose_shader->setUniform("u_volumetric_result", volumetric_FBO.color_textures[0], 10);
+
+	quad->render(GL_TRIANGLES);
+
+	vol_compose_shader->disable();
+	glEnable(GL_DEPTH_TEST);
+
+	//light_buffer.color_textures[0]->toViewport();
 	
 	/*GFX::Shader* depth = GFX::Shader::Get("depth");
 	depth->enable();
@@ -562,7 +589,7 @@ void Renderer::renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX:
 }
 
 void Renderer::computeSSAO(Camera* camera) {
-	int sample_count = 30;
+	int sample_count = 53;
 	float ao_radius = 0.01f;
 
 	ssao_FBO.bind();
@@ -603,6 +630,39 @@ void Renderer::computeSSAO(Camera* camera) {
 	ao_shader->disable();
 
 	ssao_FBO.unbind();
+}
+
+void Renderer::computeVolumetric(Camera* camera, LightEntity* light, vec3 ambient_light) {
+	volumetric_FBO.bind();
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+
+	GFX::Shader* vol_shader = GFX::Shader::Get("volumetric");
+
+	vol_shader->enable();
+
+	mat4 inv_vp = camera->viewprojection_matrix;
+	inv_vp.inverse();
+
+	vol_shader->setUniform("u_camera_position", camera->eye);
+	vol_shader->setUniform("u_inv_vp_mat", inv_vp);
+	vol_shader->setUniform("u_gbuffer_depth", gbuffer.depth_texture, 7);
+
+	vol_shader->setUniform("u_shadow_vp", shadow_vp);
+	vol_shader->setUniform("u_shadowmap", shadow_FBO.depth_texture, 1);
+
+	vol_shader->setUniform("u_light_pos", light->root.model.getTranslation());
+	vol_shader->setUniform("u_light_color", light->color);
+	vol_shader->setUniform("u_light_intensity", light->intensity);
+
+	vol_shader->setUniform("u_ambient_light", ambient_light);
+
+	quad->render(GL_TRIANGLES);
+
+	vol_shader->disable();
+
+	volumetric_FBO.unbind();
 }
 
 #ifndef SKIP_IMGUI

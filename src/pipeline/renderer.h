@@ -46,6 +46,8 @@ namespace SCN {
 		std::vector<vec3> ao_sample_points;
 		GFX::FBO ssao_FBO;
 
+		GFX::FBO volumetric_FBO;
+
 		bool render_wireframe;
 		bool render_boundaries;
 
@@ -81,6 +83,8 @@ namespace SCN {
 		void renderShadowMap(mat4& shadow_viewproj, GFX::FBO& shadow_target, LightEntity* light);
 
 		void computeSSAO(Camera* camera);
+
+		void computeVolumetric(Camera* camera, LightEntity* light, vec3 ambient_light);
 
 		//to render one mesh given its material and transformation matrix
 		void renderMeshWithMaterial(Camera* camera, const Matrix44 model, GFX::Mesh* mesh, SCN::Material* material, std::vector<LightEntity*> &lights_to_render);

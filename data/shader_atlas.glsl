@@ -10,7 +10,8 @@ gbuffer_fill basic.vs gbuffer_fill.fs
 light_volume basic.vs light_volume.fs
 first_pas quad.vs first_pass.fs
 ssao_pass quad.vs ssao_pass.fs
-
+volumetric quad.vs volumetric.fs
+volumetric_comp quad.vs volumetric_comp.fs
 
 phong basic.vs phong.fs
 
@@ -662,7 +663,7 @@ void main()
 		vec3 L = normalize(u_light_positions[u_index] - world_pos);
 
 		float light_dist = distance(u_light_positions[u_index], world_pos);
-		vec3 light_attenuation = (u_light_intensities[u_index] * u_light_colors[u_index]) / (1.0+(light_dist*light_dist));
+		vec3 light_attenuation = (u_light_intensities[u_index] * u_light_colors[u_index]) / ((light_dist*light_dist));
 
 		if (u_light_type[u_index] == 2) {
 			vec2 cone_data = u_cone_data[u_index];
@@ -707,31 +708,12 @@ uniform sampler2D u_gbuffer_depth;
 
 uniform vec2 u_res_inv;
 
-const int MAX_SAMPLE_COUNT = 30;
+const int MAX_SAMPLE_COUNT = 64;
 uniform int u_sample_count;
 uniform vec3 u_sample_pos[MAX_SAMPLE_COUNT];
 uniform float u_sample_radius;
 
 out vec4 FragColor;
-
-vec3 points[16] = {
-vec3(0.355647266, 0.0937004983, -0.0243267361),
-vec3(-0.340726703, -2.97872749e-08, -0.300947130),
-vec3(-0.469363153, 0.0652965903, -0.140362382),
-vec3(-0.272493631, 0.0627098009, 0.125692934),
-vec3(-0.0723427683, 0.366701156, 0.323128462),
-vec3(-0.0691736117, 0.00391585613, 0.486232638),
-vec3(0.177007183, -0.336863309, -0.0491127186),
-vec3(-0.146231636, -0.111964323, 0.249020889),
-vec3(-0.0991556719, 0.366977900, -0.0923202634),
-vec3(-0.0922925398, -0.425431788, 0.210904568),
-vec3(-0.390294969, 0.134999231, 0.209265247),
-vec3(-0.318935096, -0.0776300579, 0.358989298),
-vec3(-0.115982905, -0.201863468, -0.102212638),
-vec3(0.337634087, -0.265310466, 0.190767586),
-vec3(-0.183409393, 0.377381384, -0.148681372),
-vec3(-0.161931634, -0.269925982, -0.324702382)
-};
 
 
 //from this github repo
@@ -763,9 +745,9 @@ float rand(vec2 co) {
 
 void main()
 {
-	vec2 uv = gl_FragCoord.xy * u_res_inv + 0.5 * u_res_inv;
+	vec2 uv = v_uv;
 
-	float sample_radius = 0.03;
+	float sample_radius = 0.06;
 	
 	float depth = texture(u_gbuffer_depth, uv).r;
 
@@ -790,7 +772,7 @@ void main()
 	mat3 rotmat = mat3(t,b,N);
 
 
-	for(int i = 0; i < 15; i++) {
+	for(int i = 0; i < u_sample_count; i++) {
 		//vec3 sample_pos = u_sample_pos[i] * sample_radius + view_pos;
 		vec3 sample_pos = (rotmat * u_sample_pos[i]) * sample_radius + view_pos;
 
@@ -806,8 +788,7 @@ void main()
 		float clip_depth = depth * 2.0 - 1.0;
 
 		sample_count += 1.0;
-
-
+		
 		if (clip_depth > (proj_sample.z)) {
 			ao_term += 1.0;
 		}
@@ -829,6 +810,8 @@ uniform mat4 u_inv_vp_mat;
 uniform sampler2D u_gbuffer_albedo;
 uniform sampler2D u_gbuffer_normal;
 uniform sampler2D u_gbuffer_depth;
+
+uniform sampler2D u_ssao_tex;
 
 
 uniform mat4 u_shadow_vp;
@@ -891,7 +874,7 @@ void main()
 	vec3 world_pos = not_norm_world_pos.xyz / not_norm_world_pos.w;
 
 	// Ambient contributions
-	vec3 outgoing_light = u_ambient_light;
+	vec3 outgoing_light = u_ambient_light * texture(u_ssao_tex, uv).x;
 
 	vec3 V = normalize(u_camera_position - world_pos);
 
@@ -910,4 +893,135 @@ void main()
 	color *= vec4(outgoing_light, 1.0);
 
 	FragColor = color;
+}
+
+\volumetric.fs
+#version 330 core
+
+in vec2 v_uv;
+
+uniform mat4 u_inv_vp_mat;
+
+uniform sampler2D u_gbuffer_depth;
+
+uniform mat4 u_shadow_vp;
+uniform sampler2D u_shadowmap;
+
+uniform vec3 u_camera_position;
+
+
+out vec4 FragColor;
+
+// Lighing
+uniform vec3 u_ambient_light;
+
+uniform vec3 u_light_pos;
+uniform vec3 u_light_color;
+uniform float u_light_intensity;
+
+float get_shadow_depth(vec3 world_pos) {
+	vec4 fragment_shadow = u_shadow_vp * vec4(world_pos, 1.0);
+	fragment_shadow = fragment_shadow / fragment_shadow.w;
+	vec2 frag_shadows_uv = ((fragment_shadow.xy) * 0.5) + vec2(0.5);
+
+	if (frag_shadows_uv.x < 0.0 && frag_shadows_uv.x > 1.0 && frag_shadows_uv.y < 0.0 && frag_shadows_uv.y > 1.0) {
+		return 0.0;
+	}
+
+	float shadow_map_depth = texture(u_shadowmap, frag_shadows_uv).x;
+	float frag_depth = ((((fragment_shadow.z - 0.001))) * 0.5) + 0.5;
+	if (shadow_map_depth < frag_depth) {
+		return 0.0;
+	}
+
+	return 1.0;
+}
+
+void main()
+{
+	vec4 clip_pos = vec4(v_uv * 2.0 - 1.0, -0.50, 1.0);
+
+	vec4 frag_world_pos = u_inv_vp_mat * clip_pos;
+	frag_world_pos /= frag_world_pos.w;
+
+	vec3 ray_origin = u_camera_position;
+
+	float depth = texture(u_gbuffer_depth, v_uv).x;
+
+	// if (depth >= 1.0) {
+	// 	FragColor = vec4(0.0);
+	// 	return;
+	// }w
+
+	vec4 world_from_depth = vec4(clip_pos.x, clip_pos.y, depth * 2.0 - 1.0, 1.0);
+	world_from_depth = u_inv_vp_mat * world_from_depth;
+	world_from_depth /= world_from_depth.w;
+
+	float ray_max_dist = 6.0;
+
+	float ray_dist = min(distance(world_from_depth.xyz, ray_origin), 6.0);
+
+	vec3 ray_dir = normalize(world_from_depth.xyz - ray_origin);
+
+	int step_count = 100;
+
+	float step_size = ray_dist / step_count;
+	float it_distance = 0.0;
+
+	vec3 ray_it = frag_world_pos.xyz;
+
+	float transmittance = 1.0;
+
+	float loss = 0.05;
+	vec3 in_scattering = vec3(0.0);
+
+	int i = 0;
+	for(; i < step_count; i++) {
+		it_distance += step_size;
+		ray_it = it_distance * ray_dir + ray_origin;
+
+		transmittance -= step_size * loss;
+
+		float light_dist = distance(u_light_pos, ray_it);
+		float att = 1.0;// / (light_dist * light_dist);
+
+		in_scattering += (u_light_color * u_light_intensity * att) * transmittance * (loss * step_size) * get_shadow_depth(ray_it);
+
+		in_scattering += (u_ambient_light) * transmittance * (loss * step_size);
+
+		if (transmittance < 0.0001) {
+			break;
+		}
+	}
+
+	FragColor = vec4(in_scattering, transmittance);
+	//FragColor = vec4(FragColor.xyz, 1.0);
+	//FragColor = clip_pos;
+	//FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+}
+
+
+\volumetric_comp.fs
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_final_light_tex;
+
+uniform sampler2D u_volumetric_result;
+
+out vec4 FragColor;
+
+void main()
+{
+	vec3 light_from_surface = texture(u_final_light_tex, v_uv).xyz;
+	vec4 volumetric_res = texture(u_volumetric_result, v_uv);
+
+	vec3 transmittance = vec3(volumetric_res.w);
+	vec3 in_scattering = vec3(volumetric_res.xyz);
+
+	FragColor = vec4(light_from_surface * transmittance + in_scattering, 1.0);//vec4(vec3(1.0),  volumetric_res.w * 0.5);
+	//FragColor = vec4(FragColor.xyz, 1.0);
+	//FragColor = clip_pos;
+	//FragColor = vec4(0.0, 0.0, 0.0, 1.0);
 }
