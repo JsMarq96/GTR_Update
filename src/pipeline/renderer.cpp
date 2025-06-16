@@ -83,8 +83,8 @@ Renderer::Renderer(const char* shader_atlas_filename)
 		true);
 
 	ssao_FBO.create(
-		win_wise.x/2,
-		win_wise.y/2,
+		win_wise.x,
+		win_wise.y,
 		1,
 		GL_RGB,
 		GL_UNSIGNED_BYTE,
@@ -637,6 +637,25 @@ void Renderer::computeVolumetric(Camera* camera, LightEntity* light, vec3 ambien
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	// Upload light data
+	vec3 light_positions[10];
+	vec3 light_colors[10];
+	float light_intensities[10];
+	int light_types[10];
+	vec3 light_dir[10];
+	vec2 cone_data[10];
+
+	int i = 0;
+	for (LightEntity* light : scene_lights) {
+		light_positions[i] = light->root.model.getTranslation();
+		light_colors[i] = light->color;
+		light_intensities[i] = light->intensity;
+		light_types[i] = light->light_type;
+		light_dir[i] = light->root.model.frontVector();
+		cone_data[i] = vec2(DEG2RAD * light->cone_info.x, DEG2RAD * light->cone_info.y);
+
+		i++;
+	}
 
 	GFX::Shader* vol_shader = GFX::Shader::Get("volumetric");
 
@@ -655,6 +674,14 @@ void Renderer::computeVolumetric(Camera* camera, LightEntity* light, vec3 ambien
 	vol_shader->setUniform("u_light_pos", light->root.model.getTranslation());
 	vol_shader->setUniform("u_light_color", light->color);
 	vol_shader->setUniform("u_light_intensity", light->intensity);
+
+	vol_shader->setUniform3Array("u_light_positions", (float*)light_positions, min(10, scene_lights.size()));
+	vol_shader->setUniform3Array("u_light_colors", (float*)light_colors, min(10, scene_lights.size()));
+	vol_shader->setUniform1Array("u_light_intensities", (float*)light_intensities, min(10, scene_lights.size()));
+	vol_shader->setUniform1Array("u_light_type", light_types, min(10, scene_lights.size()));
+	vol_shader->setUniform1("u_light_count", (int)scene_lights.size());
+	vol_shader->setUniform2Array("u_cone_data", (float*)cone_data, 10);
+	vol_shader->setUniform3Array("u_light_dirs", (float*)light_dir, 10);
 
 	vol_shader->setUniform("u_ambient_light", ambient_light);
 

@@ -40,7 +40,7 @@ float G_smith(float alpha, vec3 l, vec3 v, vec3 n) {
 	return schlick_ggx(k, l, n) * schlick_ggx(k, v, n);
 }
 
-vec3 brdf_cook_torrance(vec3 albedo, float roughness, float metalness, vec3 n, vec3 h, vec3 l, vec3 v) {
+vec3 brdf_cook_torrance_mine(vec3 albedo, float roughness, float metalness, vec3 n, vec3 h, vec3 l, vec3 v) {
 	vec3 F0 = mix(vec3(0.04), albedo, metalness);
 	float alpha = roughness * roughness; 
 
@@ -53,6 +53,40 @@ vec3 brdf_cook_torrance(vec3 albedo, float roughness, float metalness, vec3 n, v
 	vec3 specular = (F * G * D) / ((4.0 * clamp(dot(n, l), 0.0001, 1.0) * clamp(dot(n, v), 0.0001, 1.0)));
 
 	return diffuse + specular; 
+}
+
+vec3 fresnel_schlick(vec3 V, vec3 H, vec3 f0) {
+	return f0 + (vec3(1.0) - f0) * pow(1 - clamp(dot(H, V), 0.0, 1.0), 5.0);
+}
+
+float normal_dist_GGX(vec3 N, vec3 H, float alpha) {
+	float alpha2 = pow(alpha, 2);
+	return alpha2 / (PI * pow(pow(clamp(dot(N, H), 0.0, 1.0), 2) * (alpha2 - 1.0) + 1.0, 2));
+}
+
+float g1_schlick_GGX(vec3 v, vec3 N, float k) {
+	float N_dot_v = clamp(dot(N, v), 0.0001, 1.0);
+	return N_dot_v / (N_dot_v * (1.0 - k) + k);
+}
+
+float geometry_smith_GGX(vec3 L, vec3 V, vec3 N, float alpha) {
+	float k = alpha / 2.0;
+	return g1_schlick_GGX(L, N, k) * g1_schlick_GGX(V, N, k);
+}
+
+vec3 brdf_cook_torrance(vec3 albedo, float roughness, float metalness, vec3 N, vec3 H, vec3 L, vec3 V) {
+	float alpha = pow(clamp(roughness, 0.0001, 1.0), 2); // just in case clamp
+	//vec3 H = normalize(normalize(V) + normalize(L));
+
+	vec3 F0 = mix(vec3(0.04), albedo, metalness); // perfect reflection before fresnel
+	vec3 F = fresnel_schlick(V, H, F0);
+	float D = normal_dist_GGX(N, H, alpha);
+	float G = geometry_smith_GGX(L, V, N, alpha);
+
+	//vec3 kd = mix(vec3(1.0) - F, vec3(0.0), metalness); // from https://github.com/Nadrin/PBR/blob/master/data/shaders/glsl/pbr_fs.glsl line 165
+	vec3 kd = albedo;
+
+	return (kd / PI) + (F * D * G) / (4.0 * clamp(dot(N, L), 0.0001, 1.0) * clamp(dot(N, V), 0.0001, 1.0)); // small delta to avoid division by 0
 }
 
 \basic.vs
@@ -299,7 +333,7 @@ void main()
 		vec3 R = reflect(-L, N);
 
 		float light_dist = distance(u_light_positions[i], world_pos);
-		vec3 light_attenuation = (u_light_intensities[i] * u_light_colors[i]) / (1.0+(light_dist*light_dist));
+		vec3 light_attenuation = (u_light_intensities[i] * u_light_colors[i]) / ((light_dist*light_dist));
 
 		float shadow = get_shadow_depth(world_pos);
 
@@ -421,7 +455,7 @@ void main()
 		vec3 L = normalize(u_light_positions[i] - v_world_position);
 
 		float light_dist = distance(u_light_positions[i], v_world_position);
-		vec3 light_attenuation = (u_light_intensities[i] * u_light_colors[i]) / (1.0+(light_dist*light_dist));;
+		vec3 light_attenuation = (u_light_intensities[i] * u_light_colors[i]) / ((light_dist*light_dist));;
 
 		if (u_light_type[i] == 3) {
 			L = normalize(u_light_dirs[i]);
@@ -915,9 +949,13 @@ out vec4 FragColor;
 // Lighing
 uniform vec3 u_ambient_light;
 
-uniform vec3 u_light_pos;
-uniform vec3 u_light_color;
-uniform float u_light_intensity;
+uniform int u_light_count;
+uniform vec3 u_light_positions[10];
+uniform vec3 u_light_colors[10];
+uniform float u_light_intensities[10];
+uniform int u_light_type[10];
+uniform vec2 u_cone_data[10];
+uniform vec3 u_light_dirs[10];
 
 float get_shadow_depth(vec3 world_pos) {
 	vec4 fragment_shadow = u_shadow_vp * vec4(world_pos, 1.0);
@@ -963,7 +1001,7 @@ void main()
 
 	vec3 ray_dir = normalize(world_from_depth.xyz - ray_origin);
 
-	int step_count = 100;
+	int step_count = 200;
 
 	float step_size = ray_dist / step_count;
 	float it_distance = 0.0;
@@ -982,10 +1020,33 @@ void main()
 
 		transmittance -= step_size * loss;
 
-		float light_dist = distance(u_light_pos, ray_it);
-		float att = 1.0;// / (light_dist * light_dist);
+		for(int j = 0; j < u_light_count; j++) {
+			float light_dist = distance(u_light_positions[j], ray_it);
+			vec3 L = normalize(u_light_positions[j] - ray_it);
 
-		in_scattering += (u_light_color * u_light_intensity * att) * transmittance * (loss * step_size) * get_shadow_depth(ray_it);
+			vec3 light_attenuation = (u_light_intensities[j] * u_light_colors[j]) / ((light_dist*light_dist));
+
+			if (u_light_type[j] == 3) {
+				L = normalize(u_light_dirs[i]);
+				light_attenuation = u_light_intensities[j] * u_light_colors[j] * get_shadow_depth(ray_it);
+			} else if (u_light_type[j] == 2) {
+				vec2 cone_data = u_cone_data[j];
+				float minus_l_dot_d = clamp(dot(L, normalize(u_light_dirs[j])), 0.0, 1.0);
+
+				if (minus_l_dot_d >= (cone_data.x)) {
+					//light_attenuation *= vec3(pow(minus_l_dot_d, cone_data.y * 200.0));
+					light_attenuation *= clamp((minus_l_dot_d - cos(cone_data.y)) / (cos(cone_data.x)- cos(cone_data.y)), 0.0, 1.0);
+
+					
+				} else {
+					light_attenuation = vec3(0.0);
+				}
+
+				//light_attenuation = vec3(minus_l_dot_d);
+			}
+
+			in_scattering += ( light_attenuation) * transmittance * (loss * step_size);
+		}
 
 		in_scattering += (u_ambient_light) * transmittance * (loss * step_size);
 
@@ -1021,7 +1082,7 @@ void main()
 	vec3 in_scattering = vec3(volumetric_res.xyz);
 
 	FragColor = vec4(light_from_surface * transmittance + in_scattering, 1.0);//vec4(vec3(1.0),  volumetric_res.w * 0.5);
-	//FragColor = vec4(FragColor.xyz, 1.0);
+	FragColor = vec4(light_from_surface.xyz, 1.0);
 	//FragColor = clip_pos;
 	//FragColor = vec4(0.0, 0.0, 0.0, 1.0);
 }
