@@ -27,7 +27,7 @@ Application::Application()
 	// Create camera
 	camera = new Camera();
 	camera->lookAt(vec3(-150.f, 150.0f, 250.f), vec3(0.f, 0.0f, 0.f), vec3(0.f, 1.f, 0.f));
-	camera->setPerspective( 45.f, window_width/(float)window_height, 0.01f, 1000.f);
+	camera->setPerspective( 45.f, window_width/(float)window_height, 0.01f, 100.f);
 
 	//load scene
 	scene = new SCN::Scene();
