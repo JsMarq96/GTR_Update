@@ -91,6 +91,9 @@ CORE::Window* CORE::createWindow(const char* caption, int width, int height, boo
 	glcontext = SDL_GL_CreateContext(sdl_window);
 	SDL_GL_MakeCurrent(sdl_window, glcontext);
 
+	// Enable Vsync
+	SDL_GL_SetSwapInterval(1);
+
 	//in case of exit, call SDL_Quit()
 	atexit(SDL_Quit);
 
