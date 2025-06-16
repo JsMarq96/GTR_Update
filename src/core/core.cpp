@@ -68,7 +68,7 @@ CORE::Window* CORE::createWindow(const char* caption, int width, int height, boo
 #ifndef __APPLE__
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, OPENGL_VERSION_MAJOR);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, OPENGL_VERSION_MINOR);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 #endif
 
 	//antialiasing (disable this lines if it goes too slow)
@@ -142,7 +142,7 @@ void CORE::initUI()
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	// Setup Platform/Renderer bindings
-	const char* glsl_version = "#version 430";
+	const char* glsl_version = "#version 330 core";
 	ImGui_ImplSDL3_InitForOpenGL(current_window, glcontext);
 	ImGui_ImplOpenGL3_Init(glsl_version);
 #endif

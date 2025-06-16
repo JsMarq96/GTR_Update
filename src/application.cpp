@@ -31,21 +31,15 @@ Application::Application()
 
 	//load scene
 	scene = new SCN::Scene();
-	if (!scene->load("data/scene.json"))
+	if (!scene->load(getRelativePath("data/scene.json").c_str()))
 		exit(1);
 
 	camera->lookAt(scene->main_camera.eye, scene->main_camera.center, vec3(0, 1, 0));
 	camera->fov = scene->main_camera.fov;
 
-	//loads and compiles several shaders from one single file
-	//change to "data/shader_atlas_osx.txt" if you are in XCODE
-#ifdef __APPLE__
-	const char* shader_atlas_filename = "data/shader_atlas_osx.glsl";
-#else
-	const char* shader_atlas_filename = "data/shader_atlas.glsl";
-#endif
+
 	//This class will be the one in charge of rendering all 
-	renderer = new SCN::Renderer(shader_atlas_filename); //here so we have opengl ready in constructor
+	renderer = new SCN::Renderer(getRelativePath("data/shader_atlas.glsl").c_str()); //here so we have opengl ready in constructor
 
 	//our scene editor
 	editor = new SceneEditor(scene, renderer);

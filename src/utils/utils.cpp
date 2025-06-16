@@ -38,6 +38,20 @@ std::string getFolderName(std::string path)
 	return path.substr(0, pos);
 }
 
+std::string getRelativePath(std::string path) {
+	std::string new_path = path;
+
+	// NOTE: Relative paths hacks, this needs to be done properly
+#ifdef XCODE_IDE
+	new_path = "../../" + new_path;
+	#elifdef __APPLE__
+		// If its apple but not vscode, then assume that we are running in cmake
+		new_path = "../" + new_path;
+#endif
+
+	return new_path;
+}
+
 std::string getExtension(std::string path)
 {
 	size_t pos = path.find_last_of('.');
